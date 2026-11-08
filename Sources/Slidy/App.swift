@@ -118,7 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             let line = NSBox(); line.boxType = .custom; line.borderWidth = 0; line.fillColor = NSColor(white: 0.2, alpha: 1); return line
         }
         let separator = divider()
-        let footer = NSStackView(); footer.orientation = .horizontal; footer.spacing = 10; footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
         detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingTail
         detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -126,8 +125,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         nightButton.isBordered = false; nightButton.target = self; nightButton.action = #selector(toggleNight)
         nightButton.setAccessibilityLabel("Chế độ tối / sáng")
         updateNightButton()
-        footer.addArrangedSubview(status)
-        footer.addArrangedSubview(detail)
         playButton.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Trình chiếu")
         playButton.isBordered = false; playButton.target = self; playButton.action = #selector(presentSlides)
         playButton.contentTintColor = .secondaryLabelColor
@@ -137,7 +134,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         toolbar.orientation = .horizontal; toolbar.spacing = 10
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         toolbarView = toolbar
-        for view in [scroll, separator, canvas, footer] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        for view in [scroll, separator, canvas] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         root.addSubview(toolbar)
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
@@ -146,10 +143,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         NSLayoutConstraint.activate([
             canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
-            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: footer.topAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
-            separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor), footer.trailingAnchor.constraint(equalTo: root.trailingAnchor), footer.bottomAnchor.constraint(equalTo: root.bottomAnchor), footer.heightAnchor.constraint(equalToConstant: 32)
+            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
+            separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true
