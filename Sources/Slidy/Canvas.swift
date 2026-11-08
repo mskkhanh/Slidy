@@ -178,6 +178,11 @@ final class CanvasView: NSView {
         get { selection.count == 1 ? selection.first : nil }
         set { select(newValue.map { [$0] } ?? []) }
     }
+    /// ⌘A on the slide: selects every movable object.
+    override func selectAll(_ sender: Any?) {
+        guard !presenting, editor == nil, let slide else { return }
+        select(slide.items.filter(\.canMove))
+    }
     func select(_ items: [SlideItem]) {
         selection = items
         updateSelection()

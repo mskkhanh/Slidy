@@ -12,12 +12,12 @@ enum Shortcuts {
         ("Edit", [
             ("⌘Z / ⇧⌘Z", "Undo / Redo"),
             ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste (images too)"),
-            ("⌘A", "Select all")
+            ("⌘A", "Select all objects on the slide")
         ]),
         ("Insert and effects", [
             ("T", "Add a text box"),
             ("H", "Add a heading"),
-            ("F", "Toggle Fade for the selected objects"),
+            ("F", "Toggle Fade: remove it if every selected object has it (e.g. ⌘A then F clears the slide), otherwise add it"),
             ("wand button", "Top right: apply Fade to every object on every slide, top to bottom (⌘Z undoes it)"),
             ("⌘↑ / ⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges on the slide update)")
         ]),

@@ -504,7 +504,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     func toggleSelectedFade() {
         let selection = canvas.selection.filter(\.canMove)
         guard !busy, !selection.isEmpty else { return }
-        setFade(for: selection, enabled: !(selection.count == 1 && selection[0].hasFade))
+        // F toggles: if every selected object already has Fade, remove it from all of them; otherwise add Fade.
+        setFade(for: selection, enabled: !selection.allSatisfy(\.hasFade))
     }
     private func setFade(for selection: [SlideItem], enabled: Bool) {
         guard !busy, !selection.isEmpty, let slide = canvas.slide, permitTimingEdit() else { return }
