@@ -221,7 +221,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     private func updateRecentSidebar() {
         recentSidebarEntries = recentPresentations
         table.setAccessibilityLabel("Bài trình chiếu gần đây")
-        table.rowHeight = 36
+        table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
         table.reloadData()
         table.deselectAll(nil)
     }
@@ -230,17 +230,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         return recentSidebarEntries.count
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
+    private static let recentFont = NSFont.systemFont(ofSize: 12)
+    private static let recentLabelWidth: CGFloat = 124
+    /// Recent files sit close together; a long name takes a second line before it is truncated.
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        if presentation != nil, !showingRecents { return 106 }
+        guard recentSidebarEntries.indices.contains(row) else { return 28 }
+        let name = recentSidebarEntries[row].url.deletingPathExtension().lastPathComponent
+        let box = (name as NSString).boundingRect(with: NSSize(width: Self.recentLabelWidth, height: 1000),
+                                                  options: [.usesLineFragmentOrigin], attributes: [.font: Self.recentFont])
+        return box.height > 20 ? 40 : 26
+    }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let presentation, !showingRecents else {
             guard recentSidebarEntries.indices.contains(row) else { return nil }
             let entry = recentSidebarEntries[row]
             let cell = NSTableCellView()
             cell.toolTip = entry.path
-            let icon = NSImageView(image: NSImage(systemSymbolName: "doc", accessibilityDescription: nil) ?? NSImage())
-            let label = NSTextField(labelWithString: entry.url.deletingPathExtension().lastPathComponent)
-            label.font = .systemFont(ofSize: 12)
-            label.lineBreakMode = .byTruncatingMiddle
+            let symbol = NSImage(systemSymbolName: "play.rectangle.on.rectangle", accessibilityDescription: nil)
+                ?? NSImage(systemSymbolName: "rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage()
+            let icon = NSImageView(image: symbol)
+            icon.contentTintColor = NSColor(red: 0.50, green: 0.68, blue: 0.96, alpha: 1)
+            let label = NSTextField(wrappingLabelWithString: entry.url.deletingPathExtension().lastPathComponent)
+            label.font = Self.recentFont
+            label.maximumNumberOfLines = 2
+            label.lineBreakMode = .byTruncatingTail
+            label.preferredMaxLayoutWidth = Self.recentLabelWidth
             let rowContent = NSStackView(views: [icon, label])
+            rowContent.alignment = .centerY
             rowContent.spacing = 7
             rowContent.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(rowContent)
@@ -248,7 +265,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
                 rowContent.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
                 rowContent.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
                 rowContent.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 13)
+                icon.widthAnchor.constraint(equalToConstant: 16),
+                label.widthAnchor.constraint(lessThanOrEqualToConstant: Self.recentLabelWidth)
             ])
             return cell
         }
@@ -317,7 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     private func showSlideList() {
         guard let presentation else { return }
         table.setAccessibilityLabel("Slides")
-        table.rowHeight = 106
+        table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
         table.reloadData()
         table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
         table.scrollRowToVisible(index)
@@ -344,7 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
                     let position = min(max(0, lastIndex), document.slides.count - 1)
                     self.table.deselectAll(nil)
                     self.table.setAccessibilityLabel("Slides")
-                    self.table.rowHeight = 106
+                    self.table.rowHeight = 106; self.table.intercellSpacing = NSSize(width: 0, height: 4)
                     self.showingRecents = false
                     self.presentation = document; self.savedURL = nil; self.modified = false; self.index = position
                     self.undo.removeAllActions(); self.thumbnailCache.removeAllObjects()
