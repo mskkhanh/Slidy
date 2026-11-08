@@ -117,7 +117,12 @@ final class SlideSurface: NSView {
     var color = NSColor.white
     weak var canvas: CanvasView?
     override var isFlipped: Bool { true }
-    override func draw(_ dirtyRect: NSRect) { (canvas?.nightActive == true ? NightMode.surface(color) : color).setFill(); bounds.fill() }
+    override func draw(_ dirtyRect: NSRect) {
+        var shade = color
+        if canvas?.nightActive == true { shade = NightMode.surface(color) }
+        if canvas?.usesNightMode == true, canvas?.presenting != true { shade = NightMode.separated(shade) }
+        shade.setFill(); bounds.fill()
+    }
     override func mouseDown(with event: NSEvent) { canvas?.backgroundClick(event) }
     override func mouseDragged(with event: NSEvent) { canvas?.updateMarquee(event) }
     override func mouseUp(with event: NSEvent) { canvas?.endMarquee() }
