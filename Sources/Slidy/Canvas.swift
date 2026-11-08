@@ -468,7 +468,7 @@ final class CanvasView: NSView {
         if presenting {
             switch event.keyCode {
             case 53: onExit?()
-            case 123, 126, 116: back()
+            case 123, 126, 116, 51, 117: back()
             case 124, 125, 121, 49, 36: advance()
             default: break
             }

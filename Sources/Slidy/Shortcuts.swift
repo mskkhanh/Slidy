@@ -30,7 +30,7 @@ enum Shortcuts {
         ("Presenting", [
             ("⌘F hoặc ⌘Enter", "Present from the current slide (also the Play button, top right)"),
             ("→ ↓ Space Enter", "Next step"),
-            ("← ↑", "Previous step"),
+            ("← ↑ ⌫", "Previous step"),
             ("Esc", "Exit the presentation")
         ]),
         ("View", [
