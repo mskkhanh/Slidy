@@ -18,8 +18,7 @@ enum Shortcuts {
             ("T", "Add a text box"),
             ("H", "Add a heading"),
             ("F", "Toggle Fade for the selected objects"),
-            ("⌘↑ / ⌘↓", "Move a Fade effect earlier / later: select a row in the Fade list on the right, or select objects on the slide"),
-            ("⌫ hoặc F", "Remove the selected Fade group (right sidebar)")
+            ("⌘↑ / ⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges on the slide update)")
         ]),
         ("Objects on the slide", [
             ("Enter", "Edit the text of the selected object"),

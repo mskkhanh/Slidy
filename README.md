@@ -7,7 +7,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Opens PowerPoint `.pptx` files and renders the slides.
 - Edits save straight into the original file (a one-time `name.pptx.bak` backup is kept next to it). Quit is instant, and the app reopens the last file at the last slide.
 - Add and edit text, headings, bullet lists and images.
-- Fade animations with a numbered order: drag rows, or press ⌘↑ / ⌘↓ to reorder.
+- Fade animations with numbered order badges on the slide: select an object and press ⌘↑ / ⌘↓ to reorder.
 - Presentation mode with the same fade steps.
 - Pure black editing UI and a display-only night mode (⌘L) that never changes the file.
 - Press ⌘/ for the full list of keyboard shortcuts.

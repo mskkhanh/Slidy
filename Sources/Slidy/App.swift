@@ -9,11 +9,9 @@ final class PresentationWindow: NSWindow {
 final class SlideEditorWindow: NSWindow {
     var onShortcut: ((String) -> Void)?
     var onEscape: (() -> Bool)?
-    weak var fadeSidebar: FadeSidebar?
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, attachedSheet == nil, let onShortcut {
-            if fadeSidebar?.handleRemovalShortcut(event) == true || fadeSidebar?.handleReorderShortcut(event) == true { return }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers.isEmpty, event.keyCode == 53, !(firstResponder is NSTextView), onEscape?() == true { return }
             if modifiers == .command, [36, 76].contains(event.keyCode) {
@@ -41,7 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var window: NSWindow!
     let canvas = CanvasView()
     let table = NSTableView()
-    let fadeSidebar = FadeSidebar()
     let status = NSTextField(labelWithString: "")
     private let nightButton = NSButton()
     private var recentSidebarEntries: [RecentPresentation] = []
@@ -83,7 +80,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         makeMenus()
         let editorWindow = SlideEditorWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window = editorWindow
-        editorWindow.fadeSidebar = fadeSidebar
         editorWindow.onEscape = { [weak self] in
             guard let self, self.presentation != nil, self.showingRecents else { return false }
             self.toggleRecents(); return true
@@ -117,9 +113,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         scroll.drawsBackground = true; scroll.backgroundColor = .black
         scroll.documentView = table
         func divider() -> NSBox {
-            let line = NSBox(); line.boxType = .custom; line.borderWidth = 0; line.fillColor = NSColor(white: 1, alpha: 0.08); return line
+            let line = NSBox(); line.boxType = .custom; line.borderWidth = 0; line.fillColor = NSColor(white: 0.2, alpha: 1); return line
         }
-        let separator = divider(), rightSeparator = divider()
+        let separator = divider()
         let footer = NSStackView(); footer.orientation = .horizontal; footer.spacing = 10; footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
         detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingTail
@@ -131,17 +127,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         footer.addArrangedSubview(nightButton)
         footer.addArrangedSubview(status)
         footer.addArrangedSubview(detail)
-        for view in [scroll, separator, canvas, rightSeparator, fadeSidebar, footer] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        for view in [scroll, separator, canvas, footer] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         NSLayoutConstraint.activate([
             canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
             scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: footer.topAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
             separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: rightSeparator.leadingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            rightSeparator.widthAnchor.constraint(equalToConstant: 1), rightSeparator.trailingAnchor.constraint(equalTo: fadeSidebar.leadingAnchor),
-            rightSeparator.topAnchor.constraint(equalTo: root.topAnchor), rightSeparator.bottomAnchor.constraint(equalTo: footer.topAnchor),
-            fadeSidebar.widthAnchor.constraint(equalToConstant: 180), fadeSidebar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            fadeSidebar.topAnchor.constraint(equalTo: root.topAnchor), fadeSidebar.bottomAnchor.constraint(equalTo: footer.topAnchor),
+            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: footer.topAnchor),
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor), footer.trailingAnchor.constraint(equalTo: root.trailingAnchor), footer.bottomAnchor.constraint(equalTo: root.bottomAnchor), footer.heightAnchor.constraint(equalToConstant: 32)
         ])
         canvas.showsOrderBadges = true
@@ -151,13 +143,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         canvas.onWillEdit = { [weak self] in self?.checkpoint() }
         canvas.onChanged = { [weak self] in self?.didChange() }
         canvas.onDelete = { [weak self] in self?.deleteObject() }
-        fadeSidebar.onMove = { [weak self] source, destination in self?.moveFadeGroup(from: source, to: destination) }
-        fadeSidebar.onRemove = { [weak self] items in self?.setFade(for: items, enabled: false) }
-        fadeSidebar.onSelect = { [weak self] items in
-            guard let self else { return }
-            self.canvas.finishEditing(commit: true)
-            self.canvas.select(items)
-        }
         let context = NSMenu()
         context.addItem(menuItem("Đưa lên trước", #selector(bringForward)))
         context.addItem(menuItem("Đưa ra sau", #selector(sendBackward)))
@@ -314,7 +299,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         }
         status.stringValue = ""
         status.isHidden = true
-        fadeSidebar.display(presentation.slides[index].fadeGroups)
         canvas.updateOrderBadges()
         let warnings = presentation.slides[index].warnings
         detail.stringValue = warnings.first ?? (presentation.missingFonts.isEmpty ? "" : "Font thay thế: " + presentation.missingFonts.sorted().joined(separator: ", "))
@@ -476,12 +460,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         checkpoint()
         if enabled { slide.applyFade(to: selection) }
         else { selection.forEach { slide.removeFade(from: $0) } }
-        didChange()
-    }
-    func moveFadeGroup(from source: Int, to destination: Int) {
-        guard !busy, let slide = canvas.slide, permitTimingEdit() else { return }
-        checkpoint()
-        slide.moveFadeGroup(from: source, to: destination)
         didChange()
     }
     /// ⌘↑ / ⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
