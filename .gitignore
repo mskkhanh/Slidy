@@ -1,0 +1,4 @@
+.build/
+Slidy.app/
+.DS_Store
+*.pptx
