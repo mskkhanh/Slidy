@@ -128,7 +128,7 @@ enum Verification {
             guard disabledItems.allSatisfy(\.hasFade), disabled.fadeSequence.count == expected + 1 else {
                 throw AppError.message("Fade could not be enabled again")
             }
-            // Autosave: edits go back into the original file, with one untouched backup kept next to it.
+            // Autosave: edits go back into the original file, and no backup copy is created.
             let work = output.appendingPathComponent("autosave.pptx")
             try? FileManager.default.removeItem(at: work); try? FileManager.default.removeItem(at: work.appendingPathExtension("bak"))
             try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: work)
@@ -137,8 +137,8 @@ enum Verification {
             let target = live.slides[2]; _ = live.addText(to: target, list: false)
             try live.saveInPlace()
             try live.saveInPlace()
-            guard try Data(contentsOf: work.appendingPathExtension("bak")) == original, try Data(contentsOf: work) != original,
-                  try Presentation(url: work).slides[2].items.count == target.items.count else { throw AppError.message("Autosave or backup failed") }
+            guard !FileManager.default.fileExists(atPath: work.appendingPathExtension("bak").path), try Data(contentsOf: work) != original,
+                  try Presentation(url: work).slides[2].items.count == target.items.count else { throw AppError.message("Autosave failed or left a backup file") }
             // A file changed by another app since it was opened must not be overwritten.
             try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(120)], ofItemAtPath: work.path)
             do { try live.saveInPlace(); throw AppError.message("Outside change was overwritten") }

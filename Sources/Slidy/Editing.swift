@@ -170,16 +170,11 @@ extension Presentation {
         if let ext = root.child("extLst"), let index = root.children?.firstIndex(of: ext) { root.insertChild(timing, at: index) }
         else { root.addChild(timing) }
     }
-    /// Writes the edits back into the original file. The first time, the untouched original is kept
-    /// next to it as "<name>.pptx.bak" in case the round trip is lossy.
+    /// Writes the edits back into the original file (atomic replace; no backup copy is made).
     func saveInPlace() throws {
         // Never overwrite changes made to the file by another app (PowerPoint, a sync tool...) since it was opened.
         if let stamp = sourceStamp, let now = Self.modificationDate(of: source), now != stamp {
             throw AppError.message("File đã bị thay đổi bên ngoài Slidy nên Slidy không ghi đè. Dùng Tệp > Lưu bản sao… để giữ thay đổi, rồi mở lại file.")
-        }
-        let backup = source.appendingPathExtension("bak")
-        if !FileManager.default.fileExists(atPath: backup.path) {
-            try FileManager.default.copyItem(at: source, to: backup)
         }
         try save(to: source, allowOverwrite: true)
         sourceStamp = Self.modificationDate(of: source)
