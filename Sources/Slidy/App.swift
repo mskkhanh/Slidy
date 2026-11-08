@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let status = NSTextField(labelWithString: "")
     private let nightButton = NSButton()
     private let playButton = NSButton()
+    private let fadeAllButton = NSButton()
     private var toolbarView: NSView?
     private var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
@@ -131,7 +132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         playButton.contentTintColor = .secondaryLabelColor
         playButton.toolTip = "Trình chiếu từ slide hiện tại (⌘F)"
         playButton.setAccessibilityLabel("Trình chiếu")
-        let toolbar = NSStackView(views: [nightButton, playButton])
+        fadeAllButton.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Fade cho mọi slide")
+            ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade cho mọi slide")
+        fadeAllButton.isBordered = false; fadeAllButton.target = self; fadeAllButton.action = #selector(fadeAllSlides)
+        fadeAllButton.contentTintColor = .secondaryLabelColor
+        fadeAllButton.toolTip = "Áp dụng Fade cho mọi đối tượng ở tất cả slide, từ trên xuống dưới (⌘Z để hoàn tác)"
+        fadeAllButton.setAccessibilityLabel("Fade cho mọi slide")
+        let toolbar = NSStackView(views: [fadeAllButton, nightButton, playButton])
         toolbar.orientation = .horizontal; toolbar.spacing = 10
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         toolbarView = toolbar
@@ -197,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         insert.addItem(menuItem("Văn bản · T", #selector(addText))); insert.addItem(menuItem("Tiêu đề · H", #selector(addHeading))); insert.addItem(menuItem("Danh sách bullet", #selector(addList))); insert.addItem(menuItem("Ảnh…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Trình chiếu"); play.addItem(menuItem("Từ slide hiện tại", #selector(presentSlides), key: "f"))
+        play.addItem(menuItem("Áp dụng Fade cho mọi slide…", #selector(fadeAllSlides)))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
         let view = NSMenu(title: "Xem")
         view.addItem(menuItem("Chế độ tối / sáng", #selector(toggleNight), key: "l"))
@@ -504,6 +512,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         if enabled { slide.applyFade(to: selection) }
         else { selection.forEach { slide.removeFade(from: $0) } }
         didChange()
+    }
+    /// One undo step for a change that touches every slide.
+    private func checkpointAll() {
+        guard let presentation else { return }
+        let saved = presentation.slides.map { slide in
+            (slide, slide.document.xmlString, slide.timingDirty, slide.items.map { ($0.id, $0.fade, $0.duration, $0.order, $0.paragraphDurations, $0.fadeGroup) })
+        }
+        undo.registerUndo(withTarget: self) { target in
+            guard target.presentation === presentation else { return }
+            target.canvas.finishEditing(commit: false)
+            target.checkpointAll()
+            do {
+                for (slide, snapshot, timingDirty, settings) in saved {
+                    slide.document = try xml(snapshot); slide.timingDirty = timingDirty
+                    try presentation.parse(slide)
+                    for (id, fade, duration, order, paragraphDurations, group) in settings {
+                        if let item = slide.items.first(where: { $0.id == id }) { item.fade = fade; item.duration = duration; item.order = order; item.paragraphDurations = paragraphDurations; item.fadeGroup = group }
+                    }
+                }
+                target.refreshAllSlides()
+            } catch { target.showError(error) }
+        }
+        undo.setActionName("Fade cho mọi slide")
+    }
+    private func refreshAllSlides() {
+        guard let presentation else { return }
+        thumbnailCache.removeAllObjects()
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        canvas.display(presentation.slides[index], in: presentation)
+        didChange()
+    }
+    /// Top-right button: every movable object on every slide gets a Fade, numbered from the top of the slide downwards.
+    @objc func fadeAllSlides() {
+        guard let presentation, !busy, showWindow == nil, window.attachedSheet == nil else { return }
+        canvas.finishEditing(commit: true)
+        let alert = NSAlert()
+        alert.messageText = "Áp dụng Fade cho tất cả slide?"
+        alert.informativeText = "Mọi đối tượng trên \(presentation.slides.count) slide sẽ có hiệu ứng Fade, theo thứ tự từ trên xuống dưới. Thứ tự hiệu ứng hiện có sẽ được thay. Có thể hoàn tác bằng ⌘Z."
+        alert.addButton(withTitle: "Áp dụng"); alert.addButton(withTitle: "Hủy")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        checkpointAll()
+        for slide in presentation.slides {
+            let targets = slide.items.filter(\.canMove).sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }
+            guard !targets.isEmpty else { continue }
+            slide.items.forEach { $0.order = 0 }
+            targets.forEach { slide.removeFade(from: $0) }
+            targets.forEach { slide.applyFade(to: [$0]) }
+        }
+        refreshAllSlides()
     }
     /// ⌘↑ / ⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
     func reorderFade(by delta: Int) {

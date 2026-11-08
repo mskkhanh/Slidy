@@ -149,6 +149,13 @@ enum Verification {
             }
             print("Editor alignment: \(checked) text boxes checked, worst offset \(worst) pt \(worstWhere)")
             guard worst < 2 else { throw AppError.message("Editor text is not aligned with displayed text: \(worstWhere)") }
+            // Fade for every object, top to bottom, with clean numbering.
+            let sample = document.slides[2]
+            let movable = sample.items.filter(\.canMove).sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }
+            sample.items.forEach { $0.order = 0 }
+            movable.forEach { sample.removeFade(from: $0) }
+            movable.forEach { sample.applyFade(to: [$0]) }
+            guard sample.fadeGroups.flatMap({ $0 }).map(ObjectIdentifier.init) == movable.map(ObjectIdentifier.init) else { throw AppError.message("Fade-all order is not top to bottom") }
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }

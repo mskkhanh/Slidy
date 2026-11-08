@@ -18,6 +18,7 @@ enum Shortcuts {
             ("T", "Add a text box"),
             ("H", "Add a heading"),
             ("F", "Toggle Fade for the selected objects"),
+            ("wand button", "Top right: apply Fade to every object on every slide, top to bottom (⌘Z undoes it)"),
             ("⌘↑ / ⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges on the slide update)")
         ]),
         ("Objects on the slide", [
