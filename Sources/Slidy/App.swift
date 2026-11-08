@@ -108,7 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 1100, height: 700))
         window.contentView = root
         let scroll = NSScrollView()
-        let column = NSTableColumn(identifier: .init("slides")); column.width = 154
+        let column = NSTableColumn(identifier: .init("slides")); column.width = 174; column.resizingMask = .autoresizingMask
         table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
         table.delegate = self; table.dataSource = self; table.backgroundColor = .black
         table.style = .plain
@@ -246,7 +246,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
     private static let recentFont = NSFont.systemFont(ofSize: 12)
-    private static let recentLabelWidth: CGFloat = 124
+    private static let recentLabelWidth: CGFloat = 112
     /// Recent files sit close together; a long name takes a second line before it is truncated.
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if presentation != nil, !showingRecents { return 106 }
@@ -270,18 +270,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             label.font = Self.recentFont
             label.maximumNumberOfLines = 2
             label.lineBreakMode = .byTruncatingTail
+            label.cell?.truncatesLastVisibleLine = true
             label.preferredMaxLayoutWidth = Self.recentLabelWidth
-            let rowContent = NSStackView(views: [icon, label])
-            rowContent.alignment = .centerY
-            rowContent.spacing = 7
-            rowContent.translatesAutoresizingMaskIntoConstraints = false
-            cell.addSubview(rowContent)
+            let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Xóa khỏi danh sách") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
+            remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
+            remove.toolTip = "Xóa khỏi danh sách (không xóa file)"
+            remove.imageScaling = .scaleProportionallyDown
+            for view in [icon, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
             NSLayoutConstraint.activate([
-                rowContent.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
-                rowContent.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -8),
-                rowContent.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 16),
-                label.widthAnchor.constraint(lessThanOrEqualToConstant: Self.recentLabelWidth)
+                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16),
+                remove.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6), remove.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                remove.widthAnchor.constraint(equalToConstant: 18), remove.heightAnchor.constraint(equalToConstant: 18),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6), label.trailingAnchor.constraint(equalTo: remove.leadingAnchor, constant: -4),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
             return cell
         }
@@ -346,6 +347,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         showingRecents.toggle()
         if showingRecents { updateRecentSidebar() }
         else { showSlideList() }
+    }
+    /// Removes a file from the recent list only. The file itself is never touched.
+    @objc private func removeRecent(_ sender: NSButton) {
+        guard recentSidebarEntries.indices.contains(sender.tag) else { return }
+        let path = recentSidebarEntries[sender.tag].path
+        recentPresentations = recentPresentations.filter { $0.path != path }
+        updateRecentSidebar()
     }
     private func showSlideList() {
         guard let presentation else { return }
