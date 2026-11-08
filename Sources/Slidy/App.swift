@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let table = NSTableView()
     let status = NSTextField(labelWithString: "")
     private let nightButton = NSButton()
+    private let playButton = NSButton()
+    private var toolbarView: NSView?
     private var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     private var showingRecents = false
@@ -124,10 +126,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         nightButton.isBordered = false; nightButton.target = self; nightButton.action = #selector(toggleNight)
         nightButton.setAccessibilityLabel("Chế độ tối / sáng")
         updateNightButton()
-        footer.addArrangedSubview(nightButton)
         footer.addArrangedSubview(status)
         footer.addArrangedSubview(detail)
+        playButton.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Trình chiếu")
+        playButton.isBordered = false; playButton.target = self; playButton.action = #selector(presentSlides)
+        playButton.contentTintColor = .secondaryLabelColor
+        playButton.toolTip = "Trình chiếu từ slide hiện tại (⌘F)"
+        playButton.setAccessibilityLabel("Trình chiếu")
+        let toolbar = NSStackView(views: [nightButton, playButton])
+        toolbar.orientation = .horizontal; toolbar.spacing = 10
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        toolbarView = toolbar
         for view in [scroll, separator, canvas, footer] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        root.addSubview(toolbar)
+        NSLayoutConstraint.activate([
+            toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
+            toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14)
+        ])
         NSLayoutConstraint.activate([
             canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),

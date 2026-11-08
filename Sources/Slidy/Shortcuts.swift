@@ -28,13 +28,13 @@ enum Shortcuts {
             ("⌫", "Delete the object")
         ]),
         ("Presenting", [
-            ("⌘F hoặc ⌘Enter", "Present from the current slide"),
+            ("⌘F hoặc ⌘Enter", "Present from the current slide (also the Play button, top right)"),
             ("→ ↓ Space Enter", "Next step"),
             ("← ↑", "Previous step"),
             ("Esc", "Exit the presentation")
         ]),
         ("View", [
-            ("⌘L", "Switch night / light mode (display only, never changes the file)")
+            ("⌘L", "Switch night / light mode (also the moon / sun button, top right; display only, never changes the file)")
         ]),
         ("Help", [
             ("⌘/", "Show / hide this shortcut sheet")
