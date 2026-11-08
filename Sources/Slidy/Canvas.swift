@@ -401,25 +401,60 @@ final class CanvasView: NSView {
         dragOrigin = nil
         if editedDrag { editedDrag = false; rebuild(); onChanged?() }
     }
+    /// Builds the inline editor so its text sits exactly where the rendered text is: same insets, indents,
+    /// line height, alignment, vertical anchor and run styles. Bullets are shown as "•<tab>" lines.
+    func makeEditor(for item: SlideItem) -> InlineTextView {
+        let night = nightActive
+        let view = InlineTextView(frame: item.frame)
+        view.isRichText = true; view.importsGraphics = false; view.usesFontPanel = false; view.usesRuler = false
+        view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticSpellingCorrectionEnabled = false; view.allowsUndo = true
+        var fallbackColor = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil } ?? .labelColor
+        var editorBackground = item.fill ?? slide?.background ?? .white
+        if night { fallbackColor = NightMode.ink(fallbackColor); editorBackground = NightMode.surface(editorBackground) }
+        if usesNightMode, !presenting { editorBackground = NightMode.separated(editorBackground) }
+        let fallbackFont = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil } ?? .systemFont(ofSize: 24)
+        let content = NSMutableAttributedString()
+        var firstAttributes: [NSAttributedString.Key: Any] = [.font: fallbackFont, .foregroundColor: fallbackColor]
+        for (index, paragraph) in item.paragraphs.enumerated() {
+            let text = night ? NightMode.text(paragraph.text) : paragraph.text
+            var attributes: [NSAttributedString.Key: Any] = text.length > 0 ? text.attributes(at: 0, effectiveRange: nil) : [.font: fallbackFont, .foregroundColor: fallbackColor]
+            let style = NSMutableParagraphStyle()
+            style.alignment = paragraph.alignment
+            style.minimumLineHeight = paragraph.spacing; style.maximumLineHeight = paragraph.spacing
+            style.paragraphSpacingBefore = index == 0 ? 0 : paragraph.before
+            style.paragraphSpacing = paragraph.after
+            style.lineBreakMode = .byWordWrapping
+            style.headIndent = paragraph.left
+            style.firstLineHeadIndent = paragraph.bullet == nil ? paragraph.left : max(0, paragraph.left + paragraph.indent)
+            if paragraph.bullet != nil { style.tabStops = [NSTextTab(textAlignment: .left, location: paragraph.left)]; style.defaultTabInterval = 36 }
+            attributes[.paragraphStyle] = style
+            if index == 0 { firstAttributes = attributes }
+            let line = NSMutableAttributedString()
+            if paragraph.bullet != nil { line.append(NSAttributedString(string: "•\t", attributes: attributes)) }
+            line.append(text)
+            if index < item.paragraphs.count - 1 { line.append(NSAttributedString(string: "\n", attributes: attributes)) }
+            line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
+            content.append(line)
+        }
+        view.textStorage?.setAttributedString(content)
+        view.typingAttributes = firstAttributes
+        view.backgroundColor = editorBackground
+        view.insertionPointColor = (firstAttributes[.foregroundColor] as? NSColor) ?? fallbackColor
+        let top = layoutParagraphs(item, night: night).first?.origin.y ?? item.insets.top
+        view.textContainerInset = CGSize(width: item.insets.left, height: top)
+        view.textContainer?.lineFragmentPadding = 0
+        view.textContainer?.widthTracksTextView = false
+        view.textContainer?.containerSize = CGSize(width: max(1, item.frame.width - item.insets.left - item.insets.right), height: 100000)
+        view.isVerticallyResizable = true; view.maxSize = CGSize(width: item.frame.width, height: 100000)
+        return view
+    }
     func startEditing(selectContents: Bool = false) {
         guard let item = selected, item.textBody != nil, editor == nil else { return }
-        let view = InlineTextView(frame: item.frame)
-        view.isRichText = false; view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
-        view.isAutomaticSpellingCorrectionEnabled = false; view.allowsUndo = true
-        view.textContainerInset = CGSize(width: item.insets.left, height: item.insets.top)
-        view.textContainer?.lineFragmentPadding = 0
-        view.font = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil } ?? .systemFont(ofSize: 24)
-        var textColor = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil } ?? .labelColor
-        var editorBackground = item.fill ?? slide?.background ?? .white
-        if nightActive { textColor = NightMode.ink(textColor); editorBackground = NightMode.surface(editorBackground) }
-        view.textColor = textColor
-        view.backgroundColor = editorBackground
-        view.insertionPointColor = view.textColor ?? .labelColor
-        view.string = item.paragraphs.map { ($0.bullet == nil ? "" : "•\t") + $0.text.string }.joined(separator: "\n")
-        view.isVerticallyResizable = true; view.maxSize = CGSize(width: item.frame.width, height: 100000)
-        view.textContainer?.widthTracksTextView = true
+        let view = makeEditor(for: item)
         view.finish = { [weak self] commit in self?.finishEditing(commit: commit) }
         surface.addSubview(view); editor = view
+        updateOrderBadges()   // keep the order badges above the editor
         objectViews.first { $0.item === item }?.isHidden = true
         updateSelection(); window?.makeFirstResponder(view)
         if selectContents {

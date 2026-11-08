@@ -423,8 +423,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     private var autosaveTimer: Timer?
     /// Saves pending edits into the original file. Called after a short pause, and before opening another file, closing or quitting.
-    func flushSave() {
+    func flushSave(whileEditing keepEditing: Bool = false) {
         autosaveTimer?.invalidate(); autosaveTimer = nil
+        // The timer must never end a text edit the person is typing in; it waits for the edit to finish.
+        if keepEditing, canvas.editor != nil {
+            autosaveTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in self?.flushSave(whileEditing: true) }
+            return
+        }
         canvas.finishEditing(commit: true)
         guard modified, let presentation else { return }
         do { try presentation.saveInPlace(); modified = false; window.isDocumentEdited = false }
@@ -432,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     func didChange() {
         autosaveTimer?.invalidate()
-        autosaveTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in self?.flushSave() }
+        autosaveTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in self?.flushSave(whileEditing: true) }
         modified = true; thumbnailCache.removeObject(forKey: NSNumber(value: index))
         table.reloadData(forRowIndexes: IndexSet(integer: index), columnIndexes: IndexSet(integer: 0)); updateStatus()
     }
@@ -465,7 +470,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     @objc func pasteIntoSlide() {
         if let editor = canvas.editor, window.firstResponder === editor {
-            editor.paste(nil)
+            editor.pasteAsPlainText(nil)
             return
         }
         guard let presentation, !busy, showWindow == nil else { return }

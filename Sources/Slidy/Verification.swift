@@ -120,6 +120,35 @@ enum Verification {
             let backPlayer = CanvasView(frame: CGRect(x: 0, y: 0, width: 960, height: 540))
             backPlayer.display(reopened.slides[2], in: reopened, presenting: true); backPlayer.revealAll()
             guard backPlayer.step == backPlayer.fadeSteps.count, backPlayer.fadeSteps.flatMap({ $0 }).allSatisfy({ $0.0.alphaValue == 1 }) else { throw AppError.message("Previous slide not shown complete") }
+            // The inline editor must put text where the rendered text is.
+            var checked = 0, worst: CGFloat = 0, worstWhere = ""
+            let probe = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
+            for (slideIndex, slide) in document.slides.enumerated() {
+                probe.display(slide, in: document)
+                for item in slide.items where item.textBody != nil && !item.isTableCell && !item.paragraphs.isEmpty && item.paragraphs[0].text.length > 0 {
+                    guard let layout = layoutParagraphs(item).first else { continue }
+                    let editor = probe.makeEditor(for: item)
+                    guard let manager = editor.layoutManager, let container = editor.textContainer else { continue }
+                    manager.ensureLayout(for: container)
+                    let glyph = item.paragraphs[0].bullet == nil ? 0 : manager.glyphIndexForCharacter(at: 2)
+                    let rect = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                    let location = manager.location(forGlyphAt: glyph)
+                    let editorX = editor.textContainerOrigin.x + rect.minX + location.x
+                    let editorY = editor.textContainerOrigin.y + rect.minY
+                    let shownRect = layout.manager.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+                    let shownX = layout.origin.x + shownRect.minX + layout.manager.location(forGlyphAt: 0).x
+                    let shownY = layout.origin.y + shownRect.minY
+                    let existingBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
+                    guard editor.plainText == item.text, editor.bulletRows == existingBullets else {
+                        throw AppError.message("Opening the editor would change text on slide \(slideIndex + 1): \(item.text.prefix(30))")
+                    }
+                    let delta = max(abs(editorX - shownX), abs(editorY - shownY))
+                    checked += 1
+                    if delta > worst { worst = delta; worstWhere = "slide \(slideIndex + 1): editor (\(editorX),\(editorY)) shown (\(shownX),\(shownY))" }
+                }
+            }
+            print("Editor alignment: \(checked) text boxes checked, worst offset \(worst) pt \(worstWhere)")
+            guard worst < 2 else { throw AppError.message("Editor text is not aligned with displayed text: \(worstWhere)") }
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }
