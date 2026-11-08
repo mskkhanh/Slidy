@@ -195,6 +195,46 @@ enum Verification {
             movable.forEach { sample.removeFade(from: $0) }
             movable.forEach { sample.applyFade(to: [$0]) }
             guard sample.fadeGroups.flatMap({ $0 }).map(ObjectIdentifier.init) == movable.map(ObjectIdentifier.init) else { throw AppError.message("Fade-all order is not top to bottom") }
+            // Fade effects must survive autosave, quit and reopening: apply, save in place, then read the file back fresh.
+            let persist = output.appendingPathComponent("persist.pptx")
+            try? FileManager.default.removeItem(at: persist); try? FileManager.default.removeItem(at: persist.appendingPathExtension("bak"))
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: persist)
+            let fadeDoc = try Presentation(url: persist)
+            for slide in fadeDoc.slides {
+                let targets = slide.items.filter(\.canMove).sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }
+                guard !targets.isEmpty else { continue }
+                slide.items.forEach { $0.order = 0 }
+                targets.forEach { slide.removeFade(from: $0) }
+                targets.forEach { slide.applyFade(to: [$0]) }
+            }
+            if fadeDoc.slides[0].items.filter(\.canMove).count >= 3 {   // one grouped effect, one reordered effect
+                let first = fadeDoc.slides[0]
+                let movable = first.items.filter(\.canMove)
+                movable.forEach { first.removeFade(from: $0) }
+                first.applyFade(to: [movable[0], movable[1]]); first.applyFade(to: [movable[2]])
+                first.moveFadeGroup(from: 1, to: 0)
+            }
+            try fadeDoc.saveInPlace()
+            let fresh = try Presentation(url: persist)
+            var timingChecked = 0
+            for (index, slide) in fadeDoc.slides.enumerated() {
+                let expected = slide.fadeGroups.map { $0.map(\.id) }
+                let actual = fresh.slides[index].fadeGroups.map { $0.map(\.id) }
+                guard expected == actual else { throw AppError.message("Fade order changed after save on slide \(index + 1): \(expected) vs \(actual)") }
+                guard !expected.isEmpty else { continue }
+                let document = fresh.slides[index].document
+                let targets = ((try? document.nodes(forXPath: "//*[local-name()='spTgt']")) ?? []).compactMap { ($0 as? XMLElement)?.attribute(forName: "spid")?.stringValue }
+                var sequence: [String] = []
+                for id in targets where sequence.last != id { sequence.append(id) }
+                var wanted: [String] = []
+                for id in expected.flatMap({ $0 }) where wanted.last != id { wanted.append(id) }
+                let shapeIDs = Set(((try? document.nodes(forXPath: "//*[local-name()='cNvPr']")) ?? []).compactMap { ($0 as? XMLElement)?.attribute(forName: "id")?.stringValue })
+                guard sequence == wanted, sequence.allSatisfy(shapeIDs.contains), document.rootElement()?.child("timing") != nil else {
+                    throw AppError.message("Timing XML does not match the fade order on slide \(index + 1): \(sequence) vs \(wanted)")
+                }
+                timingChecked += 1
+            }
+            print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }

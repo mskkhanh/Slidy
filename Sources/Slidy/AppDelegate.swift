@@ -13,6 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     var showingRecents = false
+    /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
+    var suppressSelectionOpen = false
+    let emptyRecents = NSTextField(wrappingLabelWithString: "Chưa có bài trình chiếu nào.\nBấm ⌘O để mở một file .pptx.")
     let detail = NSTextField(labelWithString: "")
     let undo = UndoManager()
     var presentation: Presentation?
@@ -95,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         toolbarView = toolbar
         for view in [scroll, separator, canvas] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         root.addSubview(toolbar)
+        emptyRecents.font = .systemFont(ofSize: 11); emptyRecents.textColor = .tertiaryLabelColor
+        emptyRecents.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(emptyRecents)
+        NSLayoutConstraint.activate([
+            emptyRecents.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14), emptyRecents.widthAnchor.constraint(equalToConstant: 146),
+            emptyRecents.topAnchor.constraint(equalTo: root.topAnchor, constant: 16)
+        ])
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
             toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14)

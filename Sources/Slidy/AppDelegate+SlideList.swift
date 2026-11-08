@@ -7,6 +7,10 @@ struct RecentPresentation: Codable {
     let slide: Int
 
     var url: URL { URL(fileURLWithPath: path) }
+    /// File names with accents can arrive composed or decomposed; compare them in one form so a file never appears twice.
+    var key: String { Self.key(path) }
+    static func key(_ path: String) -> String { path.precomposedStringWithCanonicalMapping }
+    var exists: Bool { FileManager.default.fileExists(atPath: path) }
 }
 
 extension AppDelegate {
@@ -32,7 +36,14 @@ extension AppDelegate {
         table.setAccessibilityLabel("Bài trình chiếu gần đây")
         table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
         table.reloadData()
+        // The open file is highlighted without being "clicked" (which would reopen it).
+        suppressSelectionOpen = true
         table.deselectAll(nil)
+        if let current = presentation?.source, let row = recentSidebarEntries.firstIndex(where: { $0.key == RecentPresentation.key(current.standardizedFileURL.path) }) {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        suppressSelectionOpen = false
+        emptyRecents.isHidden = !(recentsMode && recentSidebarEntries.isEmpty)
     }
     func numberOfRows(in tableView: NSTableView) -> Int {
         if let presentation, !showingRecents { return presentation.slides.count }
@@ -65,6 +76,7 @@ extension AppDelegate {
             label.maximumNumberOfLines = 2
             label.lineBreakMode = .byTruncatingTail
             label.cell?.truncatesLastVisibleLine = true
+            if !entry.exists { label.textColor = .tertiaryLabelColor; cell.toolTip = entry.path + "\nKhông tìm thấy file" }
             label.preferredMaxLayoutWidth = Self.recentLabelWidth
             let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Xóa khỏi danh sách") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
             remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
@@ -103,11 +115,11 @@ extension AppDelegate {
         thumbnailCache.setObject(result, forKey: NSNumber(value: row)); return result
     }
     func tableViewSelectionDidChange(_ notification: Notification) {
-        guard table.selectedRow >= 0, !busy else { return }
+        guard table.selectedRow >= 0, !busy, !suppressSelectionOpen else { return }
         guard let presentation, !showingRecents else {
             if recentSidebarEntries.indices.contains(table.selectedRow) {
                 let url = recentSidebarEntries[table.selectedRow].url
-                if presentation != nil, url.standardizedFileURL == (savedURL ?? presentation?.source)?.standardizedFileURL { toggleRecents() }
+                if let open = presentation?.source, RecentPresentation.key(url.standardizedFileURL.path) == RecentPresentation.key(open.standardizedFileURL.path) { toggleRecents() }
                 else { openURL(url) }
             }
             return
@@ -127,8 +139,8 @@ extension AppDelegate {
     /// Removes a file from the recent list only. The file itself is never touched.
     @objc func removeRecent(_ sender: NSButton) {
         guard recentSidebarEntries.indices.contains(sender.tag) else { return }
-        let path = recentSidebarEntries[sender.tag].path
-        recentPresentations = recentPresentations.filter { $0.path != path }
+        let key = recentSidebarEntries[sender.tag].key
+        recentPresentations = recentPresentations.filter { $0.key != key }
         updateRecentSidebar()
     }
     func showSlideList() {

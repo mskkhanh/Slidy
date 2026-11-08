@@ -9,9 +9,10 @@ extension AppDelegate {
         let url = savedURL ?? presentation.source
         let path = url.standardizedFileURL.path
         let previous = recentPresentations
-        if previous.first?.path != path || previous.first?.slide != index {
+        let key = RecentPresentation.key(path)
+        if previous.first?.key != key || previous.first?.slide != index {
             recentPresentations = [RecentPresentation(path: path, slide: index)] +
-                Array(previous.filter { $0.path != path }.prefix(19))
+                Array(previous.filter { $0.key != key }.prefix(19))
         }
         status.stringValue = ""
         status.isHidden = true
@@ -30,7 +31,8 @@ extension AppDelegate {
     func allowDiscard() -> Bool { flushSave(); return true }
     func openURL(_ url: URL, restoring: Bool = false) {
         guard allowDiscard() else { return }
-        let lastIndex = recentPresentations.first { $0.path == url.standardizedFileURL.path }?.slide ?? 0
+        let wanted = RecentPresentation.key(url.standardizedFileURL.path)
+        let lastIndex = recentPresentations.first { $0.key == wanted }?.slide ?? 0
         openRequest += 1
         let request = openRequest
         busy = true; status.stringValue = "Đang mở…"; status.isHidden = false
@@ -44,7 +46,7 @@ extension AppDelegate {
                     self.table.deselectAll(nil)
                     self.table.setAccessibilityLabel("Slides")
                     self.table.rowHeight = 106; self.table.intercellSpacing = NSSize(width: 0, height: 4)
-                    self.showingRecents = false
+                    self.showingRecents = false; self.emptyRecents.isHidden = true
                     self.presentation = document; self.savedURL = nil; self.modified = false; self.index = position
                     self.undo.removeAllActions(); self.thumbnailCache.removeAllObjects()
                     self.table.reloadData()
@@ -53,10 +55,13 @@ extension AppDelegate {
                     self.canvas.display(document.slides[position], in: document)
                     self.updateStatus()
                 case .failure(let error):
-                    if restoring { self.recentPresentations = self.recentPresentations.filter { $0.path != url.standardizedFileURL.path } }
+                    // A file that is gone is dropped from the list; one that merely failed to open stays.
+                    if restoring || !FileManager.default.fileExists(atPath: url.path) {
+                        self.recentPresentations = self.recentPresentations.filter { $0.key != wanted }
+                    }
                     self.showError(error)
                     self.status.isHidden = true
-                    if self.presentation == nil { self.updateRecentSidebar() }
+                    if self.recentsMode { self.updateRecentSidebar() }
                     self.updateStatus()
                 }
             }
