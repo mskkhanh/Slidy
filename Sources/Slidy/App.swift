@@ -8,12 +8,14 @@ final class PresentationWindow: NSWindow {
 
 final class SlideEditorWindow: NSWindow {
     var onShortcut: ((String) -> Void)?
+    var onEscape: (() -> Bool)?
     weak var fadeSidebar: FadeSidebar?
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, attachedSheet == nil, let onShortcut {
-            if fadeSidebar?.handleRemovalShortcut(event) == true { return }
+            if fadeSidebar?.handleRemovalShortcut(event) == true || fadeSidebar?.handleReorderShortcut(event) == true { return }
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            if modifiers.isEmpty, event.keyCode == 53, !(firstResponder is NSTextView), onEscape?() == true { return }
             if modifiers == .command, [36, 76].contains(event.keyCode) {
                 if !event.isARepeat { onShortcut("present") }
                 return
@@ -41,8 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let table = NSTableView()
     let fadeSidebar = FadeSidebar()
     let status = NSTextField(labelWithString: "")
-    private let recentButton = NSButton()
     private var recentSidebarEntries: [RecentPresentation] = []
+    /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
+    private var showingRecents = false
+    private var recentsMode: Bool { presentation == nil || showingRecents }
     let detail = NSTextField(labelWithString: "")
     let undo = UndoManager()
     var presentation: Presentation?
@@ -79,6 +83,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let editorWindow = SlideEditorWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window = editorWindow
         editorWindow.fadeSidebar = fadeSidebar
+        editorWindow.onEscape = { [weak self] in
+            guard let self, self.presentation != nil, self.showingRecents else { return false }
+            self.toggleRecents(); return true
+        }
         editorWindow.onShortcut = { [weak self] key in
             switch key {
             case "f": self?.toggleSelectedFade()
@@ -94,6 +102,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             window.standardWindowButton(button)?.isHidden = true
         }
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .black
         window.title = "Slidy"; window.minSize = NSSize(width: 890, height: 520)
         window.delegate = self; window.isReleasedWhenClosed = false; window.tabbingMode = .disallowed; window.center()
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 1100, height: 700))
@@ -101,22 +111,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let scroll = NSScrollView()
         let column = NSTableColumn(identifier: .init("slides")); column.width = 154
         table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
-        table.delegate = self; table.dataSource = self; table.backgroundColor = .controlBackgroundColor
-        table.style = .sourceList
+        table.delegate = self; table.dataSource = self; table.backgroundColor = .black
+        table.style = .plain
+        scroll.drawsBackground = true; scroll.backgroundColor = .black
         scroll.documentView = table
-        let separator = NSBox(); separator.boxType = .separator
-        let rightSeparator = NSBox(); rightSeparator.boxType = .separator
+        func divider() -> NSBox {
+            let line = NSBox(); line.boxType = .custom; line.borderWidth = 0; line.fillColor = NSColor(white: 1, alpha: 0.08); return line
+        }
+        let separator = divider(), rightSeparator = divider()
         let footer = NSStackView(); footer.orientation = .horizontal; footer.spacing = 10; footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
         status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
         detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingTail
         detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        recentButton.image = NSImage(systemSymbolName: "folder", accessibilityDescription: "Bài trình chiếu đã mở")
-        recentButton.target = self
-        recentButton.action = #selector(showRecentPresentations)
-        recentButton.isBordered = false
-        recentButton.toolTip = "Bài trình chiếu đã mở (⌘E)"
-        recentButton.setAccessibilityLabel("Bài trình chiếu đã mở")
-        footer.addArrangedSubview(recentButton)
         status.isHidden = true
         footer.addArrangedSubview(status)
         footer.addArrangedSubview(detail)
@@ -133,6 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             fadeSidebar.topAnchor.constraint(equalTo: root.topAnchor), fadeSidebar.bottomAnchor.constraint(equalTo: footer.topAnchor),
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor), footer.trailingAnchor.constraint(equalTo: root.trailingAnchor), footer.bottomAnchor.constraint(equalTo: root.bottomAnchor), footer.heightAnchor.constraint(equalToConstant: 32)
         ])
+        canvas.showsOrderBadges = true
+        canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
         canvas.onOpenFile = { [weak self] in self?.openFile() }
         canvas.onWillEdit = { [weak self] in self?.checkpoint() }
         canvas.onChanged = { [weak self] in self?.didChange() }
@@ -173,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let app = NSMenu(); app.addItem(withTitle: "Thoát Slidy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let appItem = NSMenuItem(); appItem.submenu = app; menu.addItem(appItem)
         let file = NSMenu(title: "Tệp")
-        file.addItem(menuItem("Mở…", #selector(openFile), key: "o")); file.addItem(menuItem("Bài trình chiếu đã mở", #selector(showRecentPresentations), key: "e")); file.addItem(menuItem("Lưu bản sao…", #selector(saveCopy), key: "s"))
+        file.addItem(menuItem("Mở…", #selector(openFile), key: "o")); file.addItem(menuItem("Bài trình chiếu đã mở", #selector(toggleRecents), key: "e")); file.addItem(menuItem("Lưu bản sao…", #selector(saveCopy), key: "s"))
         let fileItem = NSMenuItem(); fileItem.submenu = file; menu.addItem(fileItem)
         let edit = NSMenu(title: "Sửa")
         edit.addItem(withTitle: "Hoàn tác", action: Selector(("undo:")), keyEquivalent: "z")
@@ -187,7 +195,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Trình chiếu"); play.addItem(menuItem("Từ slide hiện tại", #selector(presentSlides), key: "f"))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
+        let help = NSMenu(title: "Trợ giúp")
+        help.addItem(menuItem("Phím tắt", #selector(toggleShortcuts), key: "/"))
+        let helpItem = NSMenuItem(); helpItem.submenu = help; menu.addItem(helpItem)
         NSApp.mainMenu = menu
+    }
+    @objc func toggleShortcuts() {
+        if let sheet = window.attachedSheet {
+            if sheet is ShortcutsPanel { window.endSheet(sheet) }
+            return
+        }
+        guard showWindow == nil else { return }
+        window.beginSheet(ShortcutsPanel()) { _ in }
     }
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? { undo }
     private func updateRecentSidebar() {
@@ -197,9 +216,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         table.reloadData()
         table.deselectAll(nil)
     }
-    func numberOfRows(in tableView: NSTableView) -> Int { presentation?.slides.count ?? recentSidebarEntries.count }
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        if let presentation, !showingRecents { return presentation.slides.count }
+        return recentSidebarEntries.count
+    }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let presentation else {
+        guard let presentation, !showingRecents else {
+            guard recentSidebarEntries.indices.contains(row) else { return nil }
             let entry = recentSidebarEntries[row]
             let cell = NSTableCellView()
             cell.toolTip = entry.path
@@ -242,9 +266,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     }
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard table.selectedRow >= 0, !busy else { return }
-        guard let presentation else {
+        guard let presentation, !showingRecents else {
             if recentSidebarEntries.indices.contains(table.selectedRow) {
-                openURL(recentSidebarEntries[table.selectedRow].url)
+                let url = recentSidebarEntries[table.selectedRow].url
+                if presentation != nil, url.standardizedFileURL == (savedURL ?? presentation?.source)?.standardizedFileURL { toggleRecents() }
+                else { openURL(url) }
             }
             return
         }
@@ -264,53 +290,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         status.stringValue = ""
         status.isHidden = true
         fadeSidebar.display(presentation.slides[index].fadeGroups)
+        canvas.updateOrderBadges()
         let warnings = presentation.slides[index].warnings
         detail.stringValue = warnings.first ?? (presentation.missingFonts.isEmpty ? "" : "Font thay thế: " + presentation.missingFonts.sorted().joined(separator: ", "))
         detail.toolTip = (warnings + presentation.missingFonts.map { "Thiếu font \($0)" }).joined(separator: "\n")
         window.title = (savedURL ?? presentation.source).deletingPathExtension().lastPathComponent
         window.isDocumentEdited = modified
     }
-    @objc private func showRecentPresentations() {
-        guard window.attachedSheet == nil, showWindow == nil else { return }
-        let menu = NSMenu()
-        let entries = recentPresentations
-        var shownFolders = Set<URL>()
-        for entry in entries {
-            let folder = entry.url.deletingLastPathComponent()
-            guard shownFolders.insert(folder).inserted else { continue }
-            if menu.items.count > 0 { menu.addItem(.separator()) }
-            let heading = NSMenuItem(title: folder.lastPathComponent, action: nil, keyEquivalent: "")
-            heading.toolTip = folder.path
-            menu.addItem(heading)
-            for file in entries where file.url.deletingLastPathComponent() == folder {
-                let item = menuItem(file.url.deletingPathExtension().lastPathComponent, #selector(openRecentPresentation(_:)))
-                item.representedObject = file.url
-                item.toolTip = "Slide \(file.slide + 1)"
-                item.indentationLevel = 1
-                menu.addItem(item)
-            }
-        }
-        if !menu.items.isEmpty { menu.addItem(.separator()) }
-        menu.addItem(menuItem("Mở bài trình chiếu…", #selector(openFile)))
-        menu.popUp(positioning: nil, at: NSPoint(x: recentButton.bounds.minX, y: recentButton.bounds.maxY), in: recentButton)
+    /// ⌘E: swaps the thumbnail column for the list of recent files, and back.
+    @objc func toggleRecents() {
+        guard presentation != nil, !busy, window.attachedSheet == nil, showWindow == nil else { return }
+        canvas.finishEditing(commit: true)
+        showingRecents.toggle()
+        if showingRecents { updateRecentSidebar() }
+        else { showSlideList() }
     }
-    @objc private func openRecentPresentation(_ sender: NSMenuItem) {
-        guard let url = sender.representedObject as? URL else { return }
-        if !busy, url.standardizedFileURL == (savedURL ?? presentation?.source)?.standardizedFileURL { return }
-        openURL(url)
+    private func showSlideList() {
+        guard let presentation else { return }
+        table.setAccessibilityLabel("Slides")
+        table.rowHeight = 106
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        table.scrollRowToVisible(index)
+        _ = presentation
     }
     @objc func openFile() {
         guard !busy, window.attachedSheet == nil else { return }
         let panel = NSOpenPanel(); panel.allowedContentTypes = [UTType(filenameExtension: "pptx")!]; panel.allowsMultipleSelection = false
         panel.beginSheetModal(for: window) { [weak self] response in if response == .OK, let url = panel.url { self?.openURL(url) } }
     }
-    func allowDiscard() -> Bool {
-        canvas.finishEditing(commit: true)
-        guard modified else { return true }
-        let alert = NSAlert(); alert.messageText = "Bài trình chiếu có thay đổi chưa lưu."; alert.informativeText = "Lưu bản sao trước khi mở file khác hoặc đóng cửa sổ."
-        alert.addButton(withTitle: "Quay lại"); alert.addButton(withTitle: "Bỏ thay đổi")
-        return alert.runModal() == .alertSecondButtonReturn
-    }
+    func allowDiscard() -> Bool { flushSave(); return true }
     func openURL(_ url: URL, restoring: Bool = false) {
         guard allowDiscard() else { return }
         let lastIndex = recentPresentations.first { $0.path == url.standardizedFileURL.path }?.slide ?? 0
@@ -327,6 +336,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
                     self.table.deselectAll(nil)
                     self.table.setAccessibilityLabel("Slides")
                     self.table.rowHeight = 106
+                    self.showingRecents = false
                     self.presentation = document; self.savedURL = nil; self.modified = false; self.index = position
                     self.undo.removeAllActions(); self.thumbnailCache.removeAllObjects()
                     self.table.reloadData()
@@ -364,7 +374,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         }
         undo.setActionName("Sửa slide")
     }
+    private var autosaveTimer: Timer?
+    /// Saves pending edits into the original file. Called after a short pause, and before opening another file, closing or quitting.
+    func flushSave() {
+        autosaveTimer?.invalidate(); autosaveTimer = nil
+        canvas.finishEditing(commit: true)
+        guard modified, let presentation else { return }
+        do { try presentation.saveInPlace(); modified = false; window.isDocumentEdited = false }
+        catch { if window.attachedSheet == nil { showError(error) } }
+    }
     func didChange() {
+        autosaveTimer?.invalidate()
+        autosaveTimer = Timer.scheduledTimer(withTimeInterval: 0.8, repeats: false) { [weak self] _ in self?.flushSave() }
         modified = true; thumbnailCache.removeObject(forKey: NSNumber(value: index))
         table.reloadData(forRowIndexes: IndexSet(integer: index), columnIndexes: IndexSet(integer: 0)); updateStatus()
     }
@@ -438,6 +459,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         slide.moveFadeGroup(from: source, to: destination)
         didChange()
     }
+    /// ⌘↑ / ⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
+    func reorderFade(by delta: Int) {
+        guard !busy, let slide = canvas.slide else { return }
+        let groups = slide.fadeGroups
+        let selectedIDs = Set(canvas.selection.map { ObjectIdentifier($0) })
+        let rows = groups.indices.filter { row in groups[row].contains { selectedIDs.contains(ObjectIdentifier($0)) } }
+        guard let first = rows.first, let last = rows.last, delta < 0 ? first > 0 : last < groups.count - 1,
+              permitTimingEdit() else { return }
+        checkpoint()
+        for row in (delta < 0 ? rows : rows.reversed()) { slide.moveFadeGroup(from: row, to: delta < 0 ? row - 1 : row + 2) }
+        didChange()
+    }
     func permitTimingEdit() -> Bool {
         guard let slide = canvas.slide else { return false }
         if slide.originalTiming && !slide.timingDirty && !slide.warnings.isEmpty {
@@ -468,7 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         panel.nameFieldStringValue = savedURL?.lastPathComponent ?? presentation.source.deletingPathExtension().lastPathComponent + " — edited.pptx"
         panel.beginSheetModal(for: window) { [weak self] response in
             guard let self, response == .OK, let url = panel.url else { return }
-            do { try presentation.save(to: url); self.savedURL = url; self.modified = false; self.updateStatus() }
+            do { try presentation.save(to: url) }
             catch { self.showError(error) }
         }
     }
@@ -497,7 +530,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         return true
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool { allowDiscard() }
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { allowDiscard() ? .terminateNow : .terminateCancel }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { flushSave(); return .terminateNow }
 }
 
 @main struct SlidyApp {

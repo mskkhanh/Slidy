@@ -160,6 +160,10 @@ final class CanvasView: NSView {
     var objectMenu: NSMenu?
     let surface = SlideSurface()
     var objectViews: [ObjectView] = []
+    /// Editing aid only: numbered badges for Fade order. Never shown while presenting and never saved.
+    var showsOrderBadges = false
+    var onReorderFade: ((Int) -> Void)?
+    private var badgeViews: [OrderBadgeView] = []
     private(set) var selection: [SlideItem] = []
     var selected: SlideItem? {
         get { selection.count == 1 ? selection.first : nil }
@@ -195,7 +199,7 @@ final class CanvasView: NSView {
         surface.layer?.addSublayer(marqueeLayer)
     }
     required init?(coder: NSCoder) { fatalError() }
-    override func draw(_ dirtyRect: NSRect) { (presenting ? NSColor.black : NSColor.windowBackgroundColor).setFill(); bounds.fill() }
+    override func draw(_ dirtyRect: NSRect) { NSColor.black.setFill(); bounds.fill() }
     override func layout() {
         super.layout()
         guard let presentation else { surface.isHidden = true; return }
@@ -206,6 +210,7 @@ final class CanvasView: NSView {
         surface.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
         surface.bounds = CGRect(origin: .zero, size: presentation.size)
         updateSelection()
+        updateOrderBadges()
     }
     func display(_ slide: Slide, in presentation: Presentation, presenting: Bool = false) {
         finishEditing(commit: true)
@@ -223,6 +228,7 @@ final class CanvasView: NSView {
             let view = ObjectView(item: item, presentation: presentation, canvas: self)
             objectViews.append(view); surface.addSubview(view)
         }
+        updateOrderBadges()
         // The selection border must stay above object layers.
         selectionLayer.removeFromSuperlayer()
         surface.layer?.addSublayer(selectionLayer)
@@ -275,6 +281,20 @@ final class CanvasView: NSView {
     }
     override func mouseDragged(with event: NSEvent) { updateMarquee(event) }
     override func mouseUp(with event: NSEvent) { endMarquee() }
+    func updateOrderBadges() {
+        badgeViews.forEach { $0.removeFromSuperview() }; badgeViews = []
+        guard showsOrderBadges, !presenting, let slide else { return }
+        let diameter = 20 / surfaceScale
+        for (number, group) in slide.fadeGroups.enumerated() {
+            for item in group {
+                let badge = OrderBadgeView(number: number + 1)
+                badge.frame = CGRect(x: item.frame.maxX - diameter * 0.5, y: item.frame.minY - diameter * 0.5, width: diameter, height: diameter)
+                surface.addSubview(badge); badgeViews.append(badge)
+            }
+        }
+        selectionLayer.removeFromSuperlayer(); surface.layer?.addSublayer(selectionLayer)
+        marqueeLayer.removeFromSuperlayer(); surface.layer?.addSublayer(marqueeLayer)
+    }
     func updateSelection() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         if !selection.isEmpty, !presenting, editor == nil {
@@ -442,6 +462,11 @@ final class CanvasView: NSView {
             }
             return
         }
+        if [125, 126].contains(event.keyCode),
+           event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {
+            if !event.isARepeat { onReorderFade?(event.keyCode == 126 ? -1 : 1) }
+            return
+        }
         if [51, 117].contains(event.keyCode), selected?.canMove == true,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             if !event.isARepeat { onDelete?() }
@@ -454,5 +479,20 @@ final class CanvasView: NSView {
             switch event.keyCode { case 123: frame.origin.x -= distance; case 124: frame.origin.x += distance; case 125: frame.origin.y += distance; default: frame.origin.y -= distance }
             selected.updateFrame(frame); rebuild(); onChanged?()
         } else { super.keyDown(with: event) }
+    }
+}
+
+final class OrderBadgeView: NSView {
+    private let number: Int
+    init(number: Int) { self.number = number; super.init(frame: .zero) }
+    required init?(coder: NSCoder) { fatalError() }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(white: 0.18, alpha: 0.92).setFill(); NSBezierPath(ovalIn: bounds).fill()
+        let text = NSAttributedString(string: "\(number)", attributes: [
+            .font: NSFont.systemFont(ofSize: bounds.height * 0.58, weight: .semibold), .foregroundColor: NSColor.white])
+        let size = text.size()
+        text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
     }
 }

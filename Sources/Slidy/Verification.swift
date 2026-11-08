@@ -93,6 +93,30 @@ enum Verification {
             guard disabledItems.allSatisfy(\.hasFade), disabled.fadeSequence.count == expected + 1 else {
                 throw AppError.message("Fade could not be enabled again")
             }
+            // Autosave: edits go back into the original file, with one untouched backup kept next to it.
+            let work = output.appendingPathComponent("autosave.pptx")
+            try? FileManager.default.removeItem(at: work); try? FileManager.default.removeItem(at: work.appendingPathExtension("bak"))
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: work)
+            let original = try Data(contentsOf: work)
+            let live = try Presentation(url: work)
+            let target = live.slides[2]; _ = live.addText(to: target, list: false)
+            try live.saveInPlace()
+            try live.saveInPlace()
+            guard try Data(contentsOf: work.appendingPathExtension("bak")) == original, try Data(contentsOf: work) != original,
+                  try Presentation(url: work).slides[2].items.count == target.items.count else { throw AppError.message("Autosave or backup failed") }
+            // Reordering fade groups, and the editing-only order badges.
+            let groupsBefore = disabled.fadeGroups.count
+            if groupsBefore >= 2 {
+                let firstItem = disabled.fadeGroups[0][0]
+                disabled.moveFadeGroup(from: 0, to: 2)
+                guard disabled.fadeGroups[1].contains(where: { $0 === firstItem }) else { throw AppError.message("Fade reorder failed") }
+            }
+            let badgeCanvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 960, height: 540))
+            badgeCanvas.showsOrderBadges = true
+            badgeCanvas.display(disabled, in: reopened); badgeCanvas.layoutSubtreeIfNeeded()
+            guard badgeCanvas.surface.subviews.filter({ $0 is OrderBadgeView }).count == disabled.fadeGroups.flatMap({ $0 }).count else { throw AppError.message("Badge count mismatch") }
+            badgeCanvas.display(disabled, in: reopened, presenting: true)
+            guard !badgeCanvas.surface.subviews.contains(where: { $0 is OrderBadgeView }) else { throw AppError.message("Badges visible in presentation") }
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }

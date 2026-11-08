@@ -170,8 +170,17 @@ extension Presentation {
         if let ext = root.child("extLst"), let index = root.children?.firstIndex(of: ext) { root.insertChild(timing, at: index) }
         else { root.addChild(timing) }
     }
-    func save(to destination: URL) throws {
-        guard destination.resolvingSymlinksInPath() != source.resolvingSymlinksInPath() else {
+    /// Writes the edits back into the original file. The first time, the untouched original is kept
+    /// next to it as "<name>.pptx.bak" in case the round trip is lossy.
+    func saveInPlace() throws {
+        let backup = source.appendingPathExtension("bak")
+        if !FileManager.default.fileExists(atPath: backup.path) {
+            try FileManager.default.copyItem(at: source, to: backup)
+        }
+        try save(to: source, allowOverwrite: true)
+    }
+    func save(to destination: URL, allowOverwrite: Bool = false) throws {
+        guard allowOverwrite || destination.resolvingSymlinksInPath() != source.resolvingSymlinksInPath() else {
             throw AppError.message("Hãy chọn tên khác để lưu bản sao.")
         }
         for slide in slides {

@@ -1,14 +1,13 @@
 import AppKit
 
-private final class FadeRowView: NSTableRowView {
+/// Row with a soft gray selection, used by the slide list and the Fade list.
+final class GrayRowView: NSTableRowView {
     override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
 
     override func drawSelection(in dirtyRect: NSRect) {
-        let fill = isEmphasized ? NSColor.controlAccentColor.withAlphaComponent(0.22) :
-            NSColor.unemphasizedSelectedContentBackgroundColor
-        fill.setFill()
-        let area = bounds.insetBy(dx: 5, dy: 1)
-        NSBezierPath(roundedRect: area, xRadius: 5, yRadius: 5).fill()
+        let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        (dark ? NSColor(white: 1, alpha: 0.16) : NSColor(white: 0, alpha: 0.10)).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 6, yRadius: 6).fill()
     }
 }
 
@@ -76,6 +75,18 @@ final class FadeSidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int { groups.count }
 
+    /// ⌘↑ / ⌘↓ move the selected effect up or down the animation order.
+    func handleReorderShortcut(_ event: NSEvent) -> Bool {
+        guard window?.firstResponder === table, [125, 126].contains(event.keyCode),
+              event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command else { return false }
+        let row = table.selectedRow
+        if !event.isARepeat, groups.indices.contains(row) {
+            if event.keyCode == 126, row > 0 { onMove?(row, row - 1) }
+            else if event.keyCode == 125, row < groups.count - 1 { onMove?(row, row + 2) }
+        }
+        return true
+    }
+
     func handleRemovalShortcut(_ event: NSEvent) -> Bool {
         guard window?.firstResponder === table,
               event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
@@ -89,7 +100,7 @@ final class FadeSidebar: NSView, NSTableViewDataSource, NSTableViewDelegate {
     }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        FadeRowView()
+        GrayRowView()
     }
 
     func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
