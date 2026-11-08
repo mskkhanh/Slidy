@@ -1,0 +1,166 @@
+import AppKit
+
+/// App entry: owns the window, the open presentation and its state. Behaviour lives in the AppDelegate+*.swift extensions.
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
+    var window: NSWindow!
+    let canvas = CanvasView()
+    let table = NSTableView()
+    let status = NSTextField(labelWithString: "")
+    let nightButton = NSButton()
+    let playButton = NSButton()
+    let fadeAllButton = NSButton()
+    var toolbarView: NSView?
+    var recentSidebarEntries: [RecentPresentation] = []
+    /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
+    var showingRecents = false
+    let detail = NSTextField(labelWithString: "")
+    let undo = UndoManager()
+    var presentation: Presentation?
+    var index = 0
+    var modified = false
+    var busy = false
+    var openRequest = 0
+    let windowFrameName = "SlideEditor"
+    var savedURL: URL?
+    var showWindow: NSWindow?
+    var showCanvas: CanvasView?
+    var showNumber: SlideNumberLabel?
+    var showIndex = 0
+    var thumbnailCache = NSCache<NSNumber, NSImage>()
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard window == nil else { return }
+        thumbnailCache.countLimit = 80
+        undo.levelsOfUndo = 100   // each step keeps slide XML: bound it so long sessions do not grow
+        Presentation.removeStaleWorkFolders()
+        makeMenus()
+        let editorWindow = SlideEditorWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+        window = editorWindow
+        editorWindow.onEscape = { [weak self] in
+            guard let self, self.presentation != nil, self.showingRecents else { return false }
+            self.toggleRecents(); return true
+        }
+        editorWindow.onShortcut = { [weak self] key in
+            switch key {
+            case "f": self?.toggleSelectedFade()
+            case "t": self?.addText()
+            case "h": self?.addHeading()
+            case "present": self?.presentSlides()
+            default: break
+            }
+        }
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = true
+        }
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .black
+        window.title = "Slidy"; window.minSize = NSSize(width: 890, height: 520)
+        window.delegate = self; window.isReleasedWhenClosed = false; window.tabbingMode = .disallowed; window.center()
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 1100, height: 700))
+        window.contentView = root
+        let scroll = NSScrollView()
+        let column = NSTableColumn(identifier: .init("slides")); column.width = 174; column.resizingMask = .autoresizingMask
+        table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
+        table.delegate = self; table.dataSource = self; table.backgroundColor = .black
+        table.style = .plain
+        scroll.drawsBackground = true; scroll.backgroundColor = .black
+        scroll.documentView = table
+        func divider() -> NSBox {
+            let line = NSBox(); line.boxType = .custom; line.borderWidth = 0; line.fillColor = NSColor(white: 0.2, alpha: 1); return line
+        }
+        let separator = divider()
+        status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor
+        detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingTail
+        detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        status.isHidden = true
+        nightButton.isBordered = false; nightButton.target = self; nightButton.action = #selector(toggleNight)
+        nightButton.setAccessibilityLabel("Chế độ tối / sáng")
+        updateNightButton()
+        playButton.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Trình chiếu")
+        playButton.isBordered = false; playButton.target = self; playButton.action = #selector(presentSlides)
+        playButton.contentTintColor = .secondaryLabelColor
+        playButton.toolTip = "Trình chiếu từ slide hiện tại (⌘F)"
+        playButton.setAccessibilityLabel("Trình chiếu")
+        fadeAllButton.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Fade cho mọi slide")
+            ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade cho mọi slide")
+        fadeAllButton.isBordered = false; fadeAllButton.target = self; fadeAllButton.action = #selector(fadeAllSlides)
+        fadeAllButton.contentTintColor = .secondaryLabelColor
+        fadeAllButton.toolTip = "Áp dụng Fade cho mọi đối tượng ở tất cả slide, từ trên xuống dưới (⌘Z để hoàn tác)"
+        fadeAllButton.setAccessibilityLabel("Fade cho mọi slide")
+        let toolbar = NSStackView(views: [fadeAllButton, nightButton, playButton])
+        toolbar.orientation = .horizontal; toolbar.spacing = 10
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        toolbarView = toolbar
+        for view in [scroll, separator, canvas] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        root.addSubview(toolbar)
+        NSLayoutConstraint.activate([
+            toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
+            toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14)
+        ])
+        NSLayoutConstraint.activate([
+            canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
+            canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
+            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
+            separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+        ])
+        canvas.showsOrderBadges = true
+        canvas.usesNightMode = true
+        canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
+        canvas.onOpenFile = { [weak self] in self?.openFile() }
+        canvas.onWillEdit = { [weak self] in self?.checkpoint() }
+        canvas.onChanged = { [weak self] in self?.didChange() }
+        canvas.onDelete = { [weak self] in self?.deleteObject() }
+        let context = NSMenu()
+        context.addItem(menuItem("Đưa lên trước", #selector(bringForward)))
+        context.addItem(menuItem("Đưa ra sau", #selector(sendBackward)))
+        context.addItem(.separator()); context.addItem(menuItem("Xóa đối tượng", #selector(deleteObject)))
+        canvas.objectMenu = context
+        window.setContentSize(NSSize(width: 1100, height: 700))
+        window.setFrameUsingName(windowFrameName)
+        window.setFrameAutosaveName(windowFrameName)
+        updateRecentSidebar()
+        window.makeKeyAndOrderFront(nil)
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.busy, self.presentation == nil,
+                  let previous = self.recentPresentations.first(where: { FileManager.default.isReadableFile(atPath: $0.path) }) else { return }
+            self.openURL(previous.url, restoring: true)
+        }
+    }
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        guard let filename = filenames.first else { return }
+        if window == nil { applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification)) }
+        openURL(URL(fileURLWithPath: filename)); sender.reply(toOpenOrPrint: .success)
+    }
+    var autosaveTimer: Timer?
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { window?.makeKeyAndOrderFront(nil) }
+        return true
+    }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { allowDiscard() }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Quit is immediate. The only time it stops is when edits could not be written to the file.
+        guard !flushSave(silent: true) else { return .terminateNow }
+        let alert = NSAlert()
+        alert.messageText = "Không lưu được thay đổi vào file."
+        alert.informativeText = "Thoát bây giờ sẽ mất các thay đổi chưa lưu. Dùng Tệp > Lưu bản sao… để giữ lại chúng."
+        alert.addButton(withTitle: "Ở lại"); alert.addButton(withTitle: "Thoát không lưu")
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
+    }
+    func applicationWillTerminate(_ notification: Notification) { presentation?.discardWorkFolder() }
+}
+
+@main struct SlidyApp {
+    static func main() {
+        #if DEBUG
+        if CommandLine.arguments.contains("--verify") { Verification.run(); return }
+        if let at = CommandLine.arguments.firstIndex(of: "--memory"), CommandLine.arguments.count > at + 1 { Verification.memory(path: CommandLine.arguments[at + 1], mode: CommandLine.arguments.count > at + 2 ? CommandLine.arguments[at + 2] : "all"); return }
+        #endif
+        let application = NSApplication.shared
+        let delegate = AppDelegate(); application.delegate = delegate
+        application.setActivationPolicy(.regular)
+        withExtendedLifetime(delegate) { application.run() }
+    }
+}

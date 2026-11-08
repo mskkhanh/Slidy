@@ -2,6 +2,41 @@
 import AppKit
 // Headless verification uses the same parser, editor, exporter and renderer as the UI.
 enum Verification {
+    /// Resident memory of this process, in MB (what Activity Monitor calls Memory).
+    static func footprintMB() -> Double {
+        var info = task_vm_info_data_t(); var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) { $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count) } }
+        return result == KERN_SUCCESS ? Double(info.phys_footprint) / 1_048_576 : -1
+    }
+    /// `--memory input.pptx`: renders every slide, builds thumbnails and saves repeatedly, then reports memory growth.
+    static func memory(path: String, mode: String = "all") {
+        _ = NSApplication.shared
+        do {
+            let temp = FileManager.default.temporaryDirectory.appendingPathComponent("slidy-memory-\(UUID().uuidString).pptx")
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: path), to: temp)
+            defer { try? FileManager.default.removeItem(at: temp); try? FileManager.default.removeItem(at: temp.appendingPathExtension("bak")) }
+            let document = try Presentation(url: temp)
+            var readings: [String] = []
+            for round in 0..<60 {
+                autoreleasepool {
+                    if mode != "save" {
+                        for slide in document.slides {
+                            let view = CanvasView(frame: CGRect(x: 0, y: 0, width: 292, height: 164)); view.usesNightMode = true
+                            view.display(slide, in: document)
+                            if mode != "views" {
+                                view.layoutSubtreeIfNeeded()
+                                if let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) { view.cacheDisplay(in: view.bounds, to: bitmap) }
+                            }
+                        }
+                    }
+                    if mode == "save" || (mode == "all" && round % 6 == 0) { try? document.saveInPlace() }
+                }
+                CATransaction.flush(); RunLoop.current.run(until: Date().addingTimeInterval(0.01))   // let Core Animation release finished layers, as the app's run loop does
+                if round % 10 == 0 { readings.append(String(format: "%.1f", footprintMB())) }
+            }
+            print("Memory (MB) every 10 rounds of 24 slides + saves: \(readings.joined(separator: " → "))")
+        } catch { fputs("Memory test failed: \(error.localizedDescription)\n", stderr); exit(1) }
+    }
     static func run() {
         do {
             let arguments = CommandLine.arguments
@@ -104,6 +139,10 @@ enum Verification {
             try live.saveInPlace()
             guard try Data(contentsOf: work.appendingPathExtension("bak")) == original, try Data(contentsOf: work) != original,
                   try Presentation(url: work).slides[2].items.count == target.items.count else { throw AppError.message("Autosave or backup failed") }
+            // A file changed by another app since it was opened must not be overwritten.
+            try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(120)], ofItemAtPath: work.path)
+            do { try live.saveInPlace(); throw AppError.message("Outside change was overwritten") }
+            catch let error as AppError { if error.localizedDescription == "Outside change was overwritten" { throw error } }
             // Reordering fade groups, and the editing-only order badges.
             let groupsBefore = disabled.fadeGroups.count
             if groupsBefore >= 2 {

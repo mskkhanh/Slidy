@@ -3,143 +3,12 @@ import Foundation
 import ImageIO
 import ArchiveBridge
 
-let defaultFadeDuration = 0.1
-
-struct Paragraph {
-    var text: NSAttributedString
-    var bullet: String?
-    var left: CGFloat
-    var indent: CGFloat
-    var spacing: CGFloat
-    var before: CGFloat
-    var after: CGFloat
-    var alignment: NSTextAlignment
-    var xmlIndex: Int
-}
-final class SlideItem {
-    let node: XMLElement
-    let id: String
-    var frame: CGRect
-    var rotation: CGFloat = 0
-    var fill: NSColor?
-    var stroke: NSColor?
-    var strokeWidth: CGFloat = 0
-    var geometry = "rect"
-    var paragraphs: [Paragraph] = []
-    var insets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-    var anchor = "t"
-    var imageURL: URL?
-    var imageCrop = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
-    var isTableCell = false
-    var inherited = false
-    private static let fadeOffURI = "urn:slidepresent:fade-off"
-    private var fadeOffMarker: XMLElement? {
-        node.child("extLst")?.all("ext").first { $0.attr("uri") == Self.fadeOffURI }
-    }
-    var fade = false
-    var hasFade: Bool { fade || (hasList && fadeOffMarker == nil) }
-    func removeFade() {
-        fade = false
-        fadeGroup = nil
-        if hasList && fadeOffMarker == nil {
-            node.ensure("p:extLst").addChild(fragment("<p:ext uri=\"\(Self.fadeOffURI)\"/>"))
-        }
-    }
-    func enableFade() {
-        if let marker = fadeOffMarker {
-            let list = marker.parent as? XMLElement
-            marker.detach()
-            if list?.elements.isEmpty == true { list?.detach() }
-        }
-        fade = true
-    }
-    var duration = defaultFadeDuration
-    var fadeGroup: String?
-    var fadesByParagraph: Bool { hasList && fadeGroup == nil }
-    var paragraphDurations: [Int: Double] = [:]
-    func fadeDuration(for paragraph: Int?) -> Double { paragraph.flatMap { paragraphDurations[$0] } ?? duration }
-    var order = 0
-    var hasList: Bool { paragraphs.contains { $0.bullet != nil } }
-    var textBody: XMLElement? { node.child("txBody") }
-    var canMove: Bool { !isTableCell && !inherited }
-    var text: String { paragraphs.map { $0.text.string }.joined(separator: "\n") }
-    init(node: XMLElement, id: String, frame: CGRect) { self.node = node; self.id = id; self.frame = frame }
-    func updateFrame(_ value: CGRect) {
-        frame = value
-        let xfrm = node.ensure("p:spPr").ensure("a:xfrm")
-        let off = xfrm.ensure("a:off"), ext = xfrm.ensure("a:ext")
-        off.set("x", String(Int(value.minX * emu))); off.set("y", String(Int(value.minY * emu)))
-        ext.set("cx", String(Int(value.width * emu))); ext.set("cy", String(Int(value.height * emu)))
-    }
-}
-final class Slide {
-    let path: String
-    var document: XMLDocument
-    var items: [SlideItem] = []
-    var background = NSColor.white
-    var originalTiming: Bool
-    var timingDirty = false
-    var writtenXML: Data
-    var warnings: [String] = []
-    var title: String { items.first(where: { !$0.text.isEmpty })?.text.replacingOccurrences(of: "\n", with: " ") ?? "Slide" }
-    var tree: XMLElement { document.rootElement()!.child("cSld")!.child("spTree")! }
-    init(path: String, document: XMLDocument) {
-        self.path = path; self.document = document; self.writtenXML = document.xmlData
-        originalTiming = document.rootElement()?.child("timing") != nil
-    }
-    var fadeGroups: [[SlideItem]] {
-        let ordered = items.enumerated().filter {
-            $0.element.canMove && $0.element.hasFade
-        }.sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
-        var groups: [[SlideItem]] = []
-        var positions: [String: Int] = [:]
-        for (_, item) in ordered {
-            if let key = item.fadeGroup, let position = positions[key] {
-                groups[position].append(item)
-            } else {
-                if let key = item.fadeGroup { positions[key] = groups.count }
-                groups.append([item])
-            }
-        }
-        return groups
-    }
-    var fadeSequence: [[(item: SlideItem, paragraph: Int?)]] {
-        fadeGroups.flatMap { group -> [[(SlideItem, Int?)]] in
-            if group.count == 1, let item = group.first, item.fadesByParagraph {
-                return item.paragraphs.filter { !$0.text.string.isEmpty }.map { [(item, $0.xmlIndex)] }
-            }
-            return [group.map { ($0, nil) }]
-        }
-    }
-    func applyFade(to selection: [SlideItem]) {
-        let group = selection.count > 1 ? UUID().uuidString : nil
-        let order = (items.map(\.order).max() ?? 0) + 1
-        for item in selection {
-            item.enableFade()
-            item.duration = defaultFadeDuration
-            item.paragraphDurations.removeAll()
-            item.fadeGroup = group
-            item.order = order
-        }
-        timingDirty = true
-    }
-    func removeFade(from item: SlideItem) {
-        item.removeFade()
-        timingDirty = true
-    }
-    func moveFadeGroup(from source: Int, to insertion: Int) {
-        var groups = fadeGroups
-        let group = groups.remove(at: source)
-        groups.insert(group, at: insertion > source ? insertion - 1 : insertion)
-        for (index, items) in groups.enumerated() {
-            for item in items { item.order = index }
-        }
-        timingDirty = true
-    }
-}
+// The open .pptx: extracts it to a temp folder, parses slides, resolves themes, images and fonts, and saves it back.
 final class Presentation {
     let folder: URL
     let source: URL
+    /// Modification time of the file when it was opened or last saved by Slidy, to notice outside changes.
+    var sourceStamp: Date?
     var slides: [Slide] = []
     var size = CGSize(width: 960, height: 540)
     lazy var textLeftMargin: CGFloat = {
@@ -166,7 +35,8 @@ final class Presentation {
     let imageCache = NSCache<NSString, NSImage>()
     init(url: URL) throws {
         source = url
-        folder = FileManager.default.temporaryDirectory.appendingPathComponent("Slidy-\(UUID().uuidString)", isDirectory: true)
+        sourceStamp = Self.modificationDate(of: url)
+        folder = FileManager.default.temporaryDirectory.appendingPathComponent("\(Self.workFolderPrefix)\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         imageCache.totalCostLimit = 48 * 1024 * 1024
         do {
@@ -175,7 +45,16 @@ final class Presentation {
             try load()
         } catch { try? FileManager.default.removeItem(at: folder); throw error }
     }
-    deinit { try? FileManager.default.removeItem(at: folder) }
+    deinit { discardWorkFolder() }
+    /// The extracted copy of the .pptx lives in the temp folder. Quitting does not run deinit, so it is removed explicitly.
+    func discardWorkFolder() { try? FileManager.default.removeItem(at: folder) }
+    /// Removes work folders left by earlier runs that quit or crashed before cleaning up.
+    static func removeStaleWorkFolders() {
+        let temp = FileManager.default.temporaryDirectory
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: temp.path)) ?? []
+        for name in names where name.hasPrefix(workFolderPrefix) { try? FileManager.default.removeItem(at: temp.appendingPathComponent(name)) }
+    }
+    static let workFolderPrefix = "Slidy-"
     func part(_ path: String) throws -> XMLDocument {
         if let value = xmlCache[path] { return value }
         let value = try readXML(folder.appendingPathComponent(path)); xmlCache[path] = value; return value

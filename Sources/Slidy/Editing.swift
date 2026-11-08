@@ -173,11 +173,19 @@ extension Presentation {
     /// Writes the edits back into the original file. The first time, the untouched original is kept
     /// next to it as "<name>.pptx.bak" in case the round trip is lossy.
     func saveInPlace() throws {
+        // Never overwrite changes made to the file by another app (PowerPoint, a sync tool...) since it was opened.
+        if let stamp = sourceStamp, let now = Self.modificationDate(of: source), now != stamp {
+            throw AppError.message("File đã bị thay đổi bên ngoài Slidy nên Slidy không ghi đè. Dùng Tệp > Lưu bản sao… để giữ thay đổi, rồi mở lại file.")
+        }
         let backup = source.appendingPathExtension("bak")
         if !FileManager.default.fileExists(atPath: backup.path) {
             try FileManager.default.copyItem(at: source, to: backup)
         }
         try save(to: source, allowOverwrite: true)
+        sourceStamp = Self.modificationDate(of: source)
+    }
+    static func modificationDate(of url: URL) -> Date? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
     }
     func save(to destination: URL, allowOverwrite: Bool = false) throws {
         guard allowOverwrite || destination.resolvingSymlinksInPath() != source.resolvingSymlinksInPath() else {
@@ -196,6 +204,13 @@ extension Presentation {
         var error = [CChar](repeating: 0, count: 1024)
         guard sp_pack(folder.path, temporary.path, &error, Int32(error.count)) == 0 else { throw AppError.message(String(cString: error)) }
         // Same-directory rename provides an atomic replacement, including on retry.
-        guard rename(temporary.path, destination.path) == 0 else { throw AppError.message("Không thể lưu file tại vị trí đã chọn.") }
+        // replaceItemAt swaps the file atomically and keeps its permissions, tags and creation date.
+        do {
+            if FileManager.default.fileExists(atPath: destination.path) {
+                _ = try FileManager.default.replaceItemAt(destination, withItemAt: temporary)
+            } else {
+                try FileManager.default.moveItem(at: temporary, to: destination)
+            }
+        } catch { throw AppError.message("Không thể lưu file tại vị trí đã chọn.") }
     }
 }
