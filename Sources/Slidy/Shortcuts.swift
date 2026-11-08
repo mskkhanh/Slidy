@@ -3,42 +3,42 @@ import AppKit
 /// Single source for the shortcut list shown by ⌘/. Update it when a shortcut is added or changed.
 enum Shortcuts {
     static let sections: [(title: String, items: [(keys: String, action: String)])] = [
-        ("Tệp", [
-            ("⌘O", "Mở bài trình chiếu"),
-            ("⌘E", "Hiện danh sách bài đã mở ở cột trái (Esc hoặc ⌘E để quay lại các slide)"),
-            ("⌘S", "Lưu bản sao (thay đổi luôn tự lưu vào file gốc)"),
-            ("⌘Q", "Thoát")
+        ("File", [
+            ("⌘O", "Open a presentation"),
+            ("⌘E", "Show recent files in the left column (Esc or ⌘E to return to the slides)"),
+            ("⌘S", "Save a copy (changes are always autosaved to the original file)"),
+            ("⌘Q", "Quit")
         ]),
-        ("Sửa", [
-            ("⌘Z / ⇧⌘Z", "Hoàn tác / Làm lại"),
-            ("⌘X  ⌘C  ⌘V", "Cắt / Sao chép / Dán (cả ảnh)"),
-            ("⌘A", "Chọn tất cả")
+        ("Edit", [
+            ("⌘Z / ⇧⌘Z", "Undo / Redo"),
+            ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste (images too)"),
+            ("⌘A", "Select all")
         ]),
-        ("Chèn và hiệu ứng", [
-            ("T", "Thêm khối văn bản"),
-            ("H", "Thêm tiêu đề"),
-            ("F", "Bật / tắt hiệu ứng Fade cho đối tượng đã chọn"),
-            ("⌘↑ / ⌘↓", "Dời hiệu ứng Fade lên / xuống thứ tự: chọn hàng ở danh sách Fade bên phải, hoặc chọn đối tượng trên slide"),
-            ("⌫ hoặc F", "Gỡ nhóm Fade đang chọn ở thanh bên phải")
+        ("Insert and effects", [
+            ("T", "Add a text box"),
+            ("H", "Add a heading"),
+            ("F", "Toggle Fade for the selected objects"),
+            ("⌘↑ / ⌘↓", "Move a Fade effect earlier / later: select a row in the Fade list on the right, or select objects on the slide"),
+            ("⌫ hoặc F", "Remove the selected Fade group (right sidebar)")
         ]),
-        ("Đối tượng trên slide", [
-            ("Enter", "Sửa chữ trong đối tượng đã chọn"),
-            ("⇧Enter", "Xuống dòng trong khối chữ"),
-            ("Esc", "Thoát chế độ sửa chữ"),
-            ("← ↑ ↓ →", "Dịch đối tượng 1 px (giữ ⇧ để dịch 10 px)"),
-            ("⌫", "Xóa đối tượng")
+        ("Objects on the slide", [
+            ("Enter", "Edit the text of the selected object"),
+            ("⇧Enter", "New line inside a text box"),
+            ("Esc", "Stop editing text"),
+            ("← ↑ ↓ →", "Nudge the object 1 px (hold ⇧ for 10 px)"),
+            ("⌫", "Delete the object")
         ]),
-        ("Trình chiếu", [
-            ("⌘F hoặc ⌘Enter", "Trình chiếu từ slide hiện tại"),
-            ("→ ↓ Space Enter", "Bước tiếp theo"),
-            ("← ↑", "Bước trước"),
-            ("Esc", "Thoát trình chiếu")
+        ("Presenting", [
+            ("⌘F hoặc ⌘Enter", "Present from the current slide"),
+            ("→ ↓ Space Enter", "Next step"),
+            ("← ↑", "Previous step"),
+            ("Esc", "Exit the presentation")
         ]),
-        ("Hiển thị", [
-            ("⌘L", "Chuyển chế độ tối / sáng (chỉ đổi cách hiển thị, không đổi file)")
+        ("View", [
+            ("⌘L", "Switch night / light mode (display only, never changes the file)")
         ]),
-        ("Trợ giúp", [
-            ("⌘/", "Hiện / ẩn bảng phím tắt này")
+        ("Help", [
+            ("⌘/", "Show / hide this shortcut sheet")
         ])
     ]
 }
@@ -46,8 +46,8 @@ enum Shortcuts {
 final class ShortcutsPanel: NSPanel {
     init() {
         super.init(contentRect: NSRect(x: 0, y: 0, width: 520, height: 560), styleMask: [.titled], backing: .buffered, defer: false)
-        title = "Phím tắt"
-        let heading = NSTextField(labelWithString: "Phím tắt")
+        title = "Keyboard Shortcuts"
+        let heading = NSTextField(labelWithString: "Keyboard Shortcuts")
         heading.font = .systemFont(ofSize: 18, weight: .semibold)
         let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 6
         for section in Shortcuts.sections {
@@ -77,7 +77,7 @@ final class ShortcutsPanel: NSPanel {
             flipped.widthAnchor.constraint(equalToConstant: 500)
         ])
         let scroll = NSScrollView(); scroll.documentView = flipped; scroll.hasVerticalScroller = true; scroll.drawsBackground = false
-        let close = NSButton(title: "Đóng", target: self, action: #selector(closeSheet))
+        let close = NSButton(title: "Close", target: self, action: #selector(closeSheet))
         close.keyEquivalent = "\u{1b}"
         let root = NSView()
         for view in [heading, scroll, close] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
