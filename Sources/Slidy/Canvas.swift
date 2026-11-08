@@ -12,11 +12,11 @@ struct ParagraphLayout {
     let bulletX: CGFloat
     let attributes: [NSAttributedString.Key: Any]
 }
-func layoutParagraphs(_ item: SlideItem) -> [ParagraphLayout] {
+func layoutParagraphs(_ item: SlideItem, night: Bool = false) -> [ParagraphLayout] {
     var y = item.insets.top
     var result: [ParagraphLayout] = []
     for paragraph in item.paragraphs {
-        let content = NSMutableAttributedString(attributedString: paragraph.text)
+        let content = NSMutableAttributedString(attributedString: night ? NightMode.text(paragraph.text) : paragraph.text)
         let style = NSMutableParagraphStyle()
         style.alignment = paragraph.alignment
         style.minimumLineHeight = paragraph.spacing
@@ -84,7 +84,7 @@ final class ObjectView: NSView {
         self.item = item; self.presentation = presentation; self.canvas = canvas
         super.init(frame: item.frame)
         wantsLayer = true
-        for layout in layoutParagraphs(item) {
+        for layout in layoutParagraphs(item, night: canvas?.nightActive ?? false) {
             let view = ParagraphView(layout: layout, width: item.frame.width)
             paragraphViews.append(view); addSubview(view)
         }
@@ -99,8 +99,9 @@ final class ObjectView: NSView {
         if item.geometry == "ellipse" { path = NSBezierPath(ovalIn: bounds) }
         else if item.geometry == "roundRect" { path = NSBezierPath(roundedRect: bounds, xRadius: min(bounds.height / 2, 14), yRadius: min(bounds.height / 2, 14)) }
         else { path = NSBezierPath(rect: bounds) }
-        if let fill = item.fill { fill.setFill(); path.fill() }
-        if let stroke = item.stroke { stroke.setStroke(); path.lineWidth = item.strokeWidth; path.stroke() }
+        let night = canvas?.nightActive ?? false
+        if let fill = item.fill { (night ? NightMode.surface(fill) : fill).setFill(); path.fill() }
+        if let stroke = item.stroke { (night ? NightMode.ink(stroke) : stroke).setStroke(); path.lineWidth = item.strokeWidth; path.stroke() }
         if let image = presentation.image(for: item) {
             let crop = item.imageCrop
             let source = CGRect(x: image.size.width * crop.left, y: image.size.height * crop.bottom, width: image.size.width * max(0.01, 1 - crop.left - crop.right), height: image.size.height * max(0.01, 1 - crop.top - crop.bottom))
@@ -116,7 +117,7 @@ final class SlideSurface: NSView {
     var color = NSColor.white
     weak var canvas: CanvasView?
     override var isFlipped: Bool { true }
-    override func draw(_ dirtyRect: NSRect) { color.setFill(); bounds.fill() }
+    override func draw(_ dirtyRect: NSRect) { (canvas?.nightActive == true ? NightMode.surface(color) : color).setFill(); bounds.fill() }
     override func mouseDown(with event: NSEvent) { canvas?.backgroundClick(event) }
     override func mouseDragged(with event: NSEvent) { canvas?.updateMarquee(event) }
     override func mouseUp(with event: NSEvent) { canvas?.endMarquee() }
@@ -162,6 +163,9 @@ final class CanvasView: NSView {
     var objectViews: [ObjectView] = []
     /// Editing aid only: numbered badges for Fade order. Never shown while presenting and never saved.
     var showsOrderBadges = false
+    /// Main canvas and thumbnails may follow night mode; the presentation player never does.
+    var usesNightMode = false
+    var nightActive: Bool { usesNightMode && NightMode.isOn && !presenting }
     var onReorderFade: ((Int) -> Void)?
     private var badgeViews: [OrderBadgeView] = []
     private(set) var selection: [SlideItem] = []
@@ -400,8 +404,11 @@ final class CanvasView: NSView {
         view.textContainerInset = CGSize(width: item.insets.left, height: item.insets.top)
         view.textContainer?.lineFragmentPadding = 0
         view.font = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil } ?? .systemFont(ofSize: 24)
-        view.textColor = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil } ?? .labelColor
-        view.backgroundColor = item.fill ?? slide?.background ?? .white
+        var textColor = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil } ?? .labelColor
+        var editorBackground = item.fill ?? slide?.background ?? .white
+        if nightActive { textColor = NightMode.ink(textColor); editorBackground = NightMode.surface(editorBackground) }
+        view.textColor = textColor
+        view.backgroundColor = editorBackground
         view.insertionPointColor = view.textColor ?? .labelColor
         view.string = item.paragraphs.map { ($0.bullet == nil ? "" : "•\t") + $0.text.string }.joined(separator: "\n")
         view.isVerticallyResizable = true; view.maxSize = CGSize(width: item.frame.width, height: 100000)

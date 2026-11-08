@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let table = NSTableView()
     let fadeSidebar = FadeSidebar()
     let status = NSTextField(labelWithString: "")
+    private let nightButton = NSButton()
     private var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     private var showingRecents = false
@@ -124,6 +125,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         detail.font = .systemFont(ofSize: 11); detail.textColor = .secondaryLabelColor; detail.lineBreakMode = .byTruncatingTail
         detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         status.isHidden = true
+        nightButton.isBordered = false; nightButton.target = self; nightButton.action = #selector(toggleNight)
+        nightButton.setAccessibilityLabel("Chế độ tối / sáng")
+        updateNightButton()
+        footer.addArrangedSubview(nightButton)
         footer.addArrangedSubview(status)
         footer.addArrangedSubview(detail)
         for view in [scroll, separator, canvas, rightSeparator, fadeSidebar, footer] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
@@ -140,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor), footer.trailingAnchor.constraint(equalTo: root.trailingAnchor), footer.bottomAnchor.constraint(equalTo: root.bottomAnchor), footer.heightAnchor.constraint(equalToConstant: 32)
         ])
         canvas.showsOrderBadges = true
+        canvas.usesNightMode = true
         canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
         canvas.onOpenFile = { [weak self] in self?.openFile() }
         canvas.onWillEdit = { [weak self] in self?.checkpoint() }
@@ -195,10 +201,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Trình chiếu"); play.addItem(menuItem("Từ slide hiện tại", #selector(presentSlides), key: "f"))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
+        let view = NSMenu(title: "Xem")
+        view.addItem(menuItem("Chế độ tối / sáng", #selector(toggleNight), key: "l"))
+        let viewItem = NSMenuItem(); viewItem.submenu = view; menu.addItem(viewItem)
         let help = NSMenu(title: "Trợ giúp")
         help.addItem(menuItem("Phím tắt", #selector(toggleShortcuts), key: "/"))
         let helpItem = NSMenuItem(); helpItem.submenu = help; menu.addItem(helpItem)
         NSApp.mainMenu = menu
+    }
+    private func updateNightButton() {
+        let night = NightMode.isOn
+        nightButton.image = NSImage(systemSymbolName: night ? "sun.max" : "moon", accessibilityDescription: nil)
+        nightButton.contentTintColor = .secondaryLabelColor
+        nightButton.toolTip = (night ? "Chế độ sáng" : "Chế độ tối") + " (⌘L): chỉ đổi cách hiển thị, không đổi file"
+    }
+    /// Display only: slide backgrounds and text colors are remapped while drawing, never saved.
+    @objc func toggleNight() {
+        canvas.finishEditing(commit: true)
+        NightMode.isOn.toggle()
+        updateNightButton()
+        thumbnailCache.removeAllObjects()
+        canvas.rebuild(); canvas.needsDisplay = true
+        if presentation != nil, !showingRecents { table.reloadData() }
     }
     @objc func toggleShortcuts() {
         if let sheet = window.attachedSheet {
@@ -256,6 +280,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         guard let presentation else { return nil }
         let slide = presentation.slides[row]
         let preview = CanvasView(frame: NSRect(x: 0, y: 0, width: 292, height: 164))
+        preview.usesNightMode = true
         preview.display(slide, in: presentation); preview.layoutSubtreeIfNeeded()
         // Render without editor margins and without enabling presentation animation.
         preview.surface.frame = preview.bounds; preview.surface.bounds = CGRect(origin: .zero, size: presentation.size)

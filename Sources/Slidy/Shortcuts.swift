@@ -34,6 +34,9 @@ enum Shortcuts {
             ("← ↑", "Bước trước"),
             ("Esc", "Thoát trình chiếu")
         ]),
+        ("Hiển thị", [
+            ("⌘L", "Chuyển chế độ tối / sáng (chỉ đổi cách hiển thị, không đổi file)")
+        ]),
         ("Trợ giúp", [
             ("⌘/", "Hiện / ẩn bảng phím tắt này")
         ])
