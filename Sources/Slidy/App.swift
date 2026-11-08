@@ -74,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var savedURL: URL?
     var showWindow: NSWindow?
     var showCanvas: CanvasView?
+    var showNumber: SlideNumberLabel?
     var showIndex = 0
     var thumbnailCache = NSCache<NSNumber, NSImage>()
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -553,6 +554,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         player.isReleasedWhenClosed = false; player.backgroundColor = .black
         let playerCanvas = CanvasView(frame: NSRect(origin: .zero, size: screen.frame.size)); player.contentView = playerCanvas
         showIndex = index; playerCanvas.display(presentation.slides[index], in: presentation, presenting: true)
+        let number = SlideNumberLabel(); number.translatesAutoresizingMaskIntoConstraints = false
+        playerCanvas.addSubview(number)
+        NSLayoutConstraint.activate([number.leadingAnchor.constraint(equalTo: playerCanvas.leadingAnchor, constant: 16), number.bottomAnchor.constraint(equalTo: playerCanvas.bottomAnchor, constant: -12)])
+        showNumber = number; updateShowNumber()
         playerCanvas.onNavigate = { [weak self] direction in self?.navigateShow(direction) }
         playerCanvas.onExit = { [weak self] in self?.endShow() }
         player.level = .mainMenu + 1; player.collectionBehavior = [.fullScreenAuxiliary]
@@ -562,8 +567,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     func navigateShow(_ direction: Int) {
         guard let presentation, presentation.slides.indices.contains(showIndex + direction) else { return }
         showIndex += direction; showCanvas?.display(presentation.slides[showIndex], in: presentation, presenting: true)
+        // Coming back to an earlier slide shows it complete, with every effect already revealed.
+        if direction < 0 { showCanvas?.revealAll() }
+        updateShowNumber()
     }
-    func endShow() { showWindow?.close(); showWindow = nil; showCanvas = nil; window.makeKeyAndOrderFront(nil) }
+    private func updateShowNumber() {
+        guard let presentation else { return }
+        showNumber?.stringValue = "\(showIndex + 1)/\(presentation.slides.count)"
+    }
+    func endShow() { showWindow?.close(); showWindow = nil; showCanvas = nil; showNumber = nil; window.makeKeyAndOrderFront(nil) }
     func showError(_ error: Error) { let alert = NSAlert(error: error); alert.beginSheetModal(for: window) }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows { window?.makeKeyAndOrderFront(nil) }

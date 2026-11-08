@@ -457,6 +457,11 @@ final class CanvasView: NSView {
             CATransaction.commit()
         } else { onNavigate?(1) }
     }
+    /// Shows every Fade effect at once (used when coming back to an earlier slide).
+    func revealAll() {
+        for entries in fadeSteps { for (view, _) in entries { view.layer?.removeAllAnimations(); view.alphaValue = 1 } }
+        step = fadeSteps.count
+    }
     func back() {
         if step > 0 {
             step -= 1
@@ -468,7 +473,8 @@ final class CanvasView: NSView {
         if presenting {
             switch event.keyCode {
             case 53: onExit?()
-            case 123, 126, 116, 51, 117: back()
+            case 123, 126, 116: back()
+            case 51, 117: onNavigate?(-1)
             case 124, 125, 121, 49, 36: advance()
             default: break
             }
@@ -506,5 +512,15 @@ final class OrderBadgeView: NSView {
             .font: NSFont.systemFont(ofSize: bounds.height * 0.58, weight: .semibold), .foregroundColor: NSColor.white])
         let size = text.size()
         text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+    }
+}
+
+/// Small, quiet slide counter for presentation mode. It never takes clicks.
+final class SlideNumberLabel: NSTextField {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    convenience init() {
+        self.init(labelWithString: "")
+        font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        textColor = NSColor(white: 0.5, alpha: 0.7)
     }
 }

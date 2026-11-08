@@ -117,6 +117,9 @@ enum Verification {
             guard badgeCanvas.surface.subviews.filter({ $0 is OrderBadgeView }).count == disabled.fadeGroups.flatMap({ $0 }).count else { throw AppError.message("Badge count mismatch") }
             badgeCanvas.display(disabled, in: reopened, presenting: true)
             guard !badgeCanvas.surface.subviews.contains(where: { $0 is OrderBadgeView }) else { throw AppError.message("Badges visible in presentation") }
+            let backPlayer = CanvasView(frame: CGRect(x: 0, y: 0, width: 960, height: 540))
+            backPlayer.display(reopened.slides[2], in: reopened, presenting: true); backPlayer.revealAll()
+            guard backPlayer.step == backPlayer.fadeSteps.count, backPlayer.fadeSteps.flatMap({ $0 }).allSatisfy({ $0.0.alphaValue == 1 }) else { throw AppError.message("Previous slide not shown complete") }
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }
