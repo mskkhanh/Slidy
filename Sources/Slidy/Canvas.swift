@@ -20,6 +20,7 @@ final class CanvasView: NSView {
     var usesNightMode = false
     var nightActive: Bool { usesNightMode && NightMode.isOn && !presenting }
     var onReorderFade: ((Int) -> Void)?
+    var onJumpSlide: ((Int) -> Void)?
     private var badgeViews: [OrderBadgeView] = []
     private(set) var selection: [SlideItem] = []
     var selected: SlideItem? {
@@ -359,6 +360,11 @@ final class CanvasView: NSView {
     }
     override func keyDown(with event: NSEvent) {
         if presenting {
+            // ⌘↓ / ⌘↑ jump to the next / previous slide, shown complete.
+            if [125, 126].contains(event.keyCode), event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {
+                if !event.isARepeat { onJumpSlide?(event.keyCode == 125 ? 1 : -1) }
+                return
+            }
             switch event.keyCode {
             case 53: onExit?()
             case 123, 126, 116: back()

@@ -16,16 +16,17 @@ extension AppDelegate {
         NSLayoutConstraint.activate([number.leadingAnchor.constraint(equalTo: playerCanvas.leadingAnchor, constant: 16), number.bottomAnchor.constraint(equalTo: playerCanvas.bottomAnchor, constant: -12)])
         showNumber = number; updateShowNumber()
         playerCanvas.onNavigate = { [weak self] direction in self?.navigateShow(direction) }
+        playerCanvas.onJumpSlide = { [weak self] direction in self?.navigateShow(direction, complete: true) }
         playerCanvas.onExit = { [weak self] in self?.endShow() }
         player.level = .mainMenu + 1; player.collectionBehavior = [.fullScreenAuxiliary]
         showWindow = player; showCanvas = playerCanvas
         player.makeKeyAndOrderFront(nil); player.makeFirstResponder(playerCanvas)
     }
-    func navigateShow(_ direction: Int) {
+    func navigateShow(_ direction: Int, complete: Bool = false) {
         guard let presentation, presentation.slides.indices.contains(showIndex + direction) else { return }
         showIndex += direction; showCanvas?.display(presentation.slides[showIndex], in: presentation, presenting: true)
-        // Coming back to an earlier slide shows it complete, with every effect already revealed.
-        if direction < 0 { showCanvas?.revealAll() }
+        // Coming back to an earlier slide, or jumping with ⌘↑/⌘↓, shows it complete with every effect already revealed.
+        if direction < 0 || complete { showCanvas?.revealAll() }
         updateShowNumber()
     }
     func updateShowNumber() {

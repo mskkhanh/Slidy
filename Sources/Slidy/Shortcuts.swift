@@ -33,6 +33,7 @@ enum Shortcuts {
             ("→ ↓ Space Enter", "Next step"),
             ("← ↑", "Previous step (or the previous slide, shown complete)"),
             ("delete ⌫", "Back to the previous slide, shown complete with all its elements"),
+            ("⌘↓ / ⌘↑", "Jump to the next / previous slide, shown complete with all its elements"),
             ("Esc", "Exit the presentation")
         ]),
         ("View", [
