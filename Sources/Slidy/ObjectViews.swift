@@ -181,9 +181,14 @@ final class SelectionOverlay: NSView {
     /// Alignment guides shown while dragging (slide coordinates).
     var guides: [(CGPoint, CGPoint)] = []
     var lineWidth: CGFloat = 1
+    /// The text caret while editing (Slidy draws and blinks it itself).
+    var caret: CGRect?
+    var caretColor: NSColor = .white
+    var caretOn = true
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func draw(_ dirtyRect: NSRect) {
+        if let caret, caretOn { caretColor.setFill(); NSBezierPath(rect: caret).fill() }
         let accent = NSColor.controlAccentColor
         accent.setStroke()
         for rect in rects { let path = NSBezierPath(rect: rect); path.lineWidth = lineWidth; path.stroke() }

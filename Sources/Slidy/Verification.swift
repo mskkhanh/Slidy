@@ -122,6 +122,36 @@ enum Verification {
             print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
             return
         }
+        if ProcessInfo.processInfo.environment["CARET"] != nil {   // is the system caret animating while editing?
+            NSApp.activate(ignoringOtherApps: true)
+            delegate.window.makeKeyAndOrderFront(nil)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            func report(_ label: String, _ view: NSTextView) {
+                var found: [String] = []
+                func walk(_ v: NSView, _ depth: Int) {
+                    let name = String(describing: type(of: v))
+                    if name.contains("Indicator") || name.contains("Insertion") { found.append("\(name) hidden=\(v.isHidden) alpha=\(v.alphaValue) anims=\(v.layer?.animationKeys() ?? []) sublayerAnims=\((v.layer?.sublayers ?? []).flatMap { $0.animationKeys() ?? [] })") }
+                    v.subviews.forEach { walk($0, depth + 1) }
+                }
+                walk(view: view)
+                print("  \(label): key=\(view.window?.isKeyWindow == true) active=\(NSApp.isActive) firstResponder=\(view.window?.firstResponder === view) indicators=\(found)")
+                func walk(view: NSView) { walk(view, 0) }
+            }
+            let slide = presentation.slides[slideIndex]
+            if let item = slide.items.first(where: { $0.textBody != nil && !$0.text.isEmpty && $0.canMove }) {
+                delegate.canvas.selected = item; delegate.canvas.startEditing()
+                RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+                if let editor = delegate.canvas.editor { report("Slidy editor", editor) }
+            }
+            // Control: a plain text view in a plain window.
+            let controlWindow = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 300, height: 120), styleMask: [.titled], backing: .buffered, defer: false)
+            let control = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 120)); control.string = "Control"
+            controlWindow.contentView = control; controlWindow.makeKeyAndOrderFront(nil); controlWindow.makeFirstResponder(control)
+            control.setSelectedRange(NSRange(location: 7, length: 0))
+            RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+            report("plain NSTextView", control)
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETESLIDE"] != nil {   // slide list focused: Delete removes the slide, ⌘Z brings it back
             delegate.window.makeFirstResponder(delegate.table)
             let count = presentation.slides.count
@@ -583,8 +613,14 @@ enum Verification {
             if let liveEditor = liveCanvas.editor {
                 let startHeight = liveEditor.frame.height
                 liveEditor.setSelectedRange(NSRange(location: liveEditor.string.count, length: 0))
+                guard let caretStart = liveCanvas.caretRect, liveEditor.insertionPointColor == .clear else { throw AppError.message("Slidy caret is not shown while editing") }
+                guard liveEditor.frame.insetBy(dx: -2, dy: -2).contains(caretStart) else { throw AppError.message("Caret is outside the editor: \(caretStart) vs \(liveEditor.frame)") }
                 for _ in 0..<2 { liveEditor.insertText("\nDòng mới", replacementRange: liveEditor.selectedRange()) }
                 guard liveEditor.frame.height > startHeight * 2 else { throw AppError.message("Editor did not grow while typing: \(startHeight) -> \(liveEditor.frame.height)") }
+                RunLoop.current.run(until: Date().addingTimeInterval(0.1))   // selection notifications arrive on the main queue
+                guard let caretEnd = liveCanvas.caretRect, caretEnd.minY > caretStart.minY + 20 else { throw AppError.message("Caret did not follow the typing: \(caretStart) -> \(String(describing: liveCanvas.caretRect))") }
+                liveEditor.setSelectedRange(NSRange(location: 0, length: 3)); RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+                guard liveCanvas.caretRect == nil else { throw AppError.message("Caret should hide while text is selected") }
                 liveCanvas.finishEditing(commit: false)
             } else { throw AppError.message("Could not start editing the new body box") }
             try withNew.removeInsertedSlide(at: 2)

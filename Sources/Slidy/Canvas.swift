@@ -55,6 +55,8 @@ final class CanvasView: NSView {
     private var editedDrag = false
     /// Selection outline, handles and marquee are drawn by one transparent view kept above every object.
     private let overlay = SelectionOverlay()
+    private var caretTimer: Timer?
+    private var caretObserver: NSObjectProtocol?
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override init(frame: NSRect) {
@@ -106,6 +108,7 @@ final class CanvasView: NSView {
         surface.bounds = CGRect(origin: .zero, size: presentation.size)
         updateSelection()
         updateOrderBadges()
+        if editor != nil { updateCaret(restartBlink: false) }
     }
     func display(_ slide: Slide, in presentation: Presentation, presenting: Bool = false) {
         finishEditing(commit: true)
@@ -448,6 +451,67 @@ final class CanvasView: NSView {
         manager.ensureLayout(for: container)
         let used = manager.usedRect(for: container).height + editor.textContainerInset.height + item.insets.bottom
         editor.setFrameSize(NSSize(width: width, height: max(24, ceil(used))))
+        updateCaret(restartBlink: false)
+    }
+    // The text caret is drawn by Slidy (in the overlay above everything) and blinks on its own timer.
+    // The system caret did not blink inside the scaled, layered slide view.
+    private func startCaret(for editor: InlineTextView) {
+        overlay.caretColor = editor.insertionPointColor
+        editor.insertionPointColor = .clear
+        caretObserver = NotificationCenter.default.addObserver(forName: NSTextView.didChangeSelectionNotification, object: editor, queue: .main) { [weak self] _ in
+            self?.updateCaret(restartBlink: true)
+        }
+        caretTimer = Timer.scheduledTimer(withTimeInterval: 0.55, repeats: true) { [weak self] _ in
+            guard let self, self.overlay.caret != nil else { return }
+            self.hideSystemCaret()
+            self.overlay.caretOn.toggle(); self.overlay.needsDisplay = true
+        }
+        updateCaret(restartBlink: true)
+    }
+    /// macOS 14+ draws its own insertion indicator inside the text view; keep it hidden so only Slidy's caret shows.
+    private func hideSystemCaret() {
+        func walk(_ view: NSView) {
+            for case let indicator as NSTextInsertionIndicator in view.subviews { indicator.displayMode = .hidden }
+            view.subviews.forEach(walk)
+        }
+        if let editor { walk(editor) }
+    }
+    private func stopCaret() {
+        caretTimer?.invalidate(); caretTimer = nil
+        if let caretObserver { NotificationCenter.default.removeObserver(caretObserver) }
+        caretObserver = nil
+        overlay.caret = nil; overlay.needsDisplay = true
+    }
+    /// Where the caret is, in slide coordinates (nil while text is selected).
+    var caretRect: CGRect? { overlay.caret }
+    func updateCaret(restartBlink: Bool) {
+        guard let editor, let manager = editor.layoutManager, let container = editor.textContainer, let storage = editor.textStorage else { overlay.caret = nil; return }
+        let selection = editor.selectedRange()
+        guard selection.length == 0 else { overlay.caret = nil; overlay.needsDisplay = true; return }
+        manager.ensureLayout(for: container)
+        var line = CGRect.zero, x: CGFloat = 0
+        let length = storage.length
+        if length == 0 || (selection.location >= length && storage.string.hasSuffix("\n")) {
+            line = manager.extraLineFragmentRect
+            if line == .zero { line = CGRect(x: 0, y: 0, width: 1, height: 24) }
+            x = manager.extraLineFragmentUsedRect.minX
+        } else if selection.location >= length {
+            let glyph = manager.glyphIndexForCharacter(at: length - 1)
+            line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            x = manager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).maxX
+        } else {
+            let glyph = manager.glyphIndexForCharacter(at: selection.location)
+            line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            x = line.minX + manager.location(forGlyphAt: glyph).x
+        }
+        let fontSize = (editor.typingAttributes[.font] as? NSFont)?.pointSize ?? 24
+        let height = min(line.height, fontSize * 1.25)
+        let origin = editor.textContainerOrigin
+        let local = CGRect(x: origin.x + x, y: origin.y + line.minY + (line.height - height) / 2, width: 1.5, height: height)
+        overlay.caret = surface.convert(local, from: editor)
+        hideSystemCaret()
+        if restartBlink { overlay.caretOn = true }
+        overlay.needsDisplay = true
     }
     func startEditing(selectContents: Bool = false) {
         guard let item = selected, item.textBody != nil, editor == nil else { return }
@@ -455,6 +519,7 @@ final class CanvasView: NSView {
         view.finish = { [weak self] commit in self?.finishEditing(commit: commit) }
         if item.autoFit { view.onTextChange = { [weak self] in self?.fitEditor() } }
         surface.addSubview(view); editor = view
+        startCaret(for: view)
         updateOrderBadges()   // keep the order badges above the editor
         objectViews.first { $0.item === item }?.isHidden = true
         updateSelection(); window?.makeFirstResponder(view)
@@ -477,6 +542,7 @@ final class CanvasView: NSView {
                 onChanged?()
             }
         }
+        stopCaret()
         editor.removeFromSuperview(); self.editor = nil
         rebuild(); window?.makeFirstResponder(self)
     }
