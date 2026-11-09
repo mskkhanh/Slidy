@@ -18,8 +18,8 @@ extension AppDelegate {
         status.isHidden = true
         canvas.updateOrderBadges()
         let warnings = presentation.slides[index].warnings
-        detail.stringValue = warnings.first ?? (presentation.missingFonts.isEmpty ? "" : "Font thay thế: " + presentation.missingFonts.sorted().joined(separator: ", "))
-        detail.toolTip = (warnings + presentation.missingFonts.map { "Thiếu font \($0)" }).joined(separator: "\n")
+        detail.stringValue = warnings.first ?? (presentation.missingFonts.isEmpty ? "" : "Substitute font: " + presentation.missingFonts.sorted().joined(separator: ", "))
+        detail.toolTip = (warnings + presentation.missingFonts.map { "Missing font \($0)" }).joined(separator: "\n")
         window.title = (savedURL ?? presentation.source).deletingPathExtension().lastPathComponent
         window.isDocumentEdited = modified
     }
@@ -35,7 +35,7 @@ extension AppDelegate {
         let lastIndex = recentPresentations.first { $0.key == wanted }?.slide ?? 0
         openRequest += 1
         let request = openRequest
-        busy = true; status.stringValue = "Đang mở…"; status.isHidden = false
+        busy = true; status.stringValue = "Opening…"; status.isHidden = false
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try Presentation(url: url) }
             DispatchQueue.main.async { [weak self] in
@@ -85,7 +85,7 @@ extension AppDelegate {
                 target.canvas.display(slide, in: presentation); target.didChange()
             } catch { target.showError(error) }
         }
-        undo.setActionName("Sửa slide")
+        undo.setActionName("Edit Slide")
     }
     /// Saves pending edits into the original file. Called after a short pause, and before opening another file, closing or quitting.
     /// Returns false only when there were changes that could not be written to the file.
@@ -132,7 +132,7 @@ extension AppDelegate {
                 target.refreshAllSlides()
             } catch { target.showError(error) }
         }
-        undo.setActionName("Fade cho mọi slide")
+        undo.setActionName("Fade All Slides")
     }
     func refreshAllSlides() {
         guard let presentation else { return }

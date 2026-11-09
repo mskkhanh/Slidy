@@ -33,7 +33,7 @@ extension AppDelegate {
     }
     func updateRecentSidebar() {
         recentSidebarEntries = recentPresentations
-        table.setAccessibilityLabel("Bài trình chiếu gần đây")
+        table.setAccessibilityLabel("Recent files")
         table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
         table.reloadData()
         // The open file is highlighted without being "clicked" (which would reopen it).
@@ -78,11 +78,11 @@ extension AppDelegate {
             label.maximumNumberOfLines = 2
             label.lineBreakMode = .byWordWrapping
             label.cell?.truncatesLastVisibleLine = true
-            if !entry.exists { label.textColor = .tertiaryLabelColor; cell.toolTip = entry.path + "\nKhông tìm thấy file" }
+            if !entry.exists { label.textColor = .tertiaryLabelColor; cell.toolTip = entry.path + "\nFile not found" }
             label.preferredMaxLayoutWidth = Self.recentLabelWidth
-            let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Xóa khỏi danh sách") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
+            let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove from list") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
             remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
-            remove.toolTip = "Xóa khỏi danh sách (không xóa file)"
+            remove.toolTip = "Remove from list"
             remove.imageScaling = .scaleProportionallyDown
             for view in [icon, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
             NSLayoutConstraint.activate([

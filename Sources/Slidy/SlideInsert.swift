@@ -31,7 +31,7 @@ extension Presentation {
     func editRelationships(_ change: (XMLElement) throws -> Void) throws {
         let url = folder.appendingPathComponent("ppt/_rels/presentation.xml.rels")
         let document = try readXML(url)
-        guard let root = document.rootElement() else { throw AppError.message("Thiếu liên kết trong file.") }
+        guard let root = document.rootElement() else { throw AppError.message("A relationship is missing in the file.") }
         try change(root)
         try document.xmlData.write(to: url, options: .atomic)
     }
@@ -45,17 +45,17 @@ extension Presentation {
     /// same background, layout, fonts, sizes, colours and positions. Returns the new slide.
     @discardableResult
     func insertSlide(after index: Int) throws -> Slide {
-        guard slides.indices.contains(index), slides.allSatisfy({ $0.listEntry != nil }) else { throw AppError.message("Không thêm được slide vào file này.") }
-        guard let reference = referenceSlide(near: index) else { throw AppError.message("Không có slide mẫu (tiêu đề và nội dung) để tạo slide mới.") }
+        guard slides.indices.contains(index), slides.allSatisfy({ $0.listEntry != nil }) else { throw AppError.message("Can’t add a slide to this file.") }
+        guard let reference = referenceSlide(near: index) else { throw AppError.message("No slide with a heading and a body to copy the look from.") }
         guard let layoutPath = related(reference.slide.path, type: "slideLayouts"),
               (try part("ppt/presentation.xml")).rootElement()?.descendant("sectionLst") == nil else {
-            throw AppError.message("Không thêm được slide vào file này (thiếu layout hoặc có Section).")
+            throw AppError.message("Can’t add a slide to this file (no layout, or it has sections).")
         }
         let number = nextSlideNumber()
         let path = "ppt/slides/slide\(number).xml"
         // Copy the reference slide, keeping only its heading and body.
         guard let document = reference.slide.document.copy() as? XMLDocument, let root = document.rootElement(),
-              let tree = root.child("cSld")?.child("spTree") else { throw AppError.message("Slide mẫu không hợp lệ.") }
+              let tree = root.child("cSld")?.child("spTree") else { throw AppError.message("The model slide is invalid.") }
         let keep: Set<String> = [reference.heading.id, reference.body.id]
         for child in tree.elements where !["nvGrpSpPr", "grpSpPr"].contains(child.localName ?? "") {
             if let id = child.descendant("cNvPr")?.attr("id"), keep.contains(id) { continue }
@@ -82,7 +82,7 @@ extension Presentation {
             root.addChild(entry)
         }
         guard let list = (try part("ppt/presentation.xml")).rootElement()?.child("sldIdLst"), let anchor = slides[index].listEntry else {
-            throw AppError.message("Thiếu danh sách slide trong file.")
+            throw AppError.message("The slide list is missing in the file.")
         }
         let nextID = (list.elements.compactMap { Int($0.attr("id") ?? "") }.max() ?? 255) + 1
         let entry = fragment("<p:sldId id=\"\(nextID)\" r:id=\"\(relationshipID)\"/>")
@@ -93,8 +93,8 @@ extension Presentation {
         xmlCache[path] = document
         try parse(slide)
         // Heading and body hug their text and grow with it.
-        if let heading = slide.items.first(where: { $0.id == reference.heading.id }) { updateText(heading, text: "Tiêu đề"); enableAutoFit(heading) }
-        if let body = slide.items.first(where: { $0.id == reference.body.id }) { updateText(body, text: "Nội dung"); if body.hasList { setListSpacing(body, on: true) }; enableAutoFit(body) }
+        if let heading = slide.items.first(where: { $0.id == reference.heading.id }) { updateText(heading, text: "Heading"); enableAutoFit(heading) }
+        if let body = slide.items.first(where: { $0.id == reference.body.id }) { updateText(body, text: "Text"); if body.hasList { setListSpacing(body, on: true) }; enableAutoFit(body) }
         // A new slide starts without any animation.
         slide.items.filter(\.hasFade).forEach { slide.removeFade(from: $0) }
         slides.insert(slide, at: index + 1)
@@ -105,7 +105,7 @@ extension Presentation {
     /// Takes back a slide made by `insertSlide` (undo): the list entry, relationship, content type and files all go.
     func removeInsertedSlide(at index: Int) throws {
         guard slides.indices.contains(index), slides.count > 1, insertedSlidePaths.contains(slides[index].path) else {
-            throw AppError.message("Chỉ hoàn tác được slide vừa tạo.")
+            throw AppError.message("Only a slide you just added can be removed this way.")
         }
         let slide = slides.remove(at: index)
         let relationshipID = slide.listEntry?.attr("r:id")
@@ -167,7 +167,7 @@ extension Presentation {
     /// Deletes a slide the way PowerPoint does: its list entry, relationship, content type, part and rels, its notes page,
     /// and media nobody else uses. Files are set aside (not erased) so `restoreSlide` can bring it all back.
     func removeSlide(at index: Int) throws -> RemovedSlide {
-        guard slides.indices.contains(index), slides.count > 1, let entry = slides[index].listEntry else { throw AppError.message("Không xóa được slide này.") }
+        guard slides.indices.contains(index), slides.count > 1, let entry = slides[index].listEntry else { throw AppError.message("Can’t delete this slide.") }
         let slide = slides[index]
         let rels = relationships(slide.path)
         let relsPath = ((slide.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent("_rels/" + (slide.path as NSString).lastPathComponent + ".rels")
@@ -220,7 +220,7 @@ extension Presentation {
         }
         try editContentTypes { text in text.replacingOccurrences(of: "</Types>", with: removed.overrides.joined() + "</Types>") }
         if let relationship = removed.relationship?.copy() as? XMLElement { try editRelationships { $0.addChild(relationship) } }
-        guard let list = (try part("ppt/presentation.xml")).rootElement()?.child("sldIdLst") else { throw AppError.message("Thiếu danh sách slide trong file.") }
+        guard let list = (try part("ppt/presentation.xml")).rootElement()?.child("sldIdLst") else { throw AppError.message("The slide list is missing in the file.") }
         slides.insert(removed.slide, at: min(removed.index, slides.count))
         removed.slide.listEntry = removed.entry
         slides.forEach { $0.listEntry?.detach() }

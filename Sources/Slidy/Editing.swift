@@ -130,21 +130,14 @@ extension Presentation {
         configureText(item)
         fitFrame(item)
     }
-    /// A light, blurred shadow falling slightly downwards, written as a standard <a:outerShdw> so PowerPoint shows it too.
-    func setSoftShadow(_ item: SlideItem) {
-        guard let properties = item.node.child("spPr") else { return }
-        properties.child("effectLst")?.detach()
-        properties.addChild(fragment("<a:effectLst><a:outerShdw blurRad=\"190500\" dist=\"50800\" dir=\"5400000\" algn=\"t\" rotWithShape=\"0\"><a:srgbClr val=\"000000\"><a:alpha val=\"22000\"/></a:srgbClr></a:outerShdw></a:effectLst>"))
-        item.shadow = ObjectShadow(blur: 15, dx: 0, dy: 4, color: NSColor(white: 0, alpha: 0.22))
-    }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)
     }
     @discardableResult func addText(to slide: Slide, list: Bool, heading: Bool = false) -> SlideItem {
         let id = nextID(slide)
         let foreground = (slide.background.usingColorSpace(.sRGB)?.brightnessComponent ?? 1) < 0.5 ? "FFFFFF" : "1F2937"
-        let name = heading ? "Tiêu đề" : (list ? "Danh sách" : "Văn bản")
-        let placeholder = heading ? "Tiêu đề" : (list ? "Mục đầu tiên" : "Nội dung")
+        let name = heading ? "Heading" : (list ? "List" : "Text")
+        let placeholder = heading ? "Heading" : (list ? "First item" : "Text")
         let fontSize = heading ? 4000 : 2400
         let typeface = heading ? majorFont : minorFont
         let bullet = list ? "<a:buChar char=\"•\"/>" : "<a:buNone/>"
@@ -159,9 +152,9 @@ extension Presentation {
         return item
     }
     @discardableResult func addImage(to slide: Slide, url: URL, pasted: Bool = false) throws -> SlideItem {
-        guard let sourceImage = NSImage(contentsOf: url), sourceImage.size.width > 0, sourceImage.size.height > 0 else { throw AppError.message("Không đọc được ảnh này.") }
+        guard let sourceImage = NSImage(contentsOf: url), sourceImage.size.width > 0, sourceImage.size.height > 0 else { throw AppError.message("Can’t read this picture.") }
         let suffix = url.pathExtension.lowercased()
-        guard ["png", "jpg", "jpeg"].contains(suffix) else { throw AppError.message("Hãy chọn ảnh PNG hoặc JPEG.") }
+        guard ["png", "jpg", "jpeg"].contains(suffix) else { throw AppError.message("Choose a PNG or JPEG picture.") }
         let mediaName = "slidy-\(UUID().uuidString).\(suffix)"
         let media = folder.appendingPathComponent("ppt/media")
         try FileManager.default.createDirectory(at: media, withIntermediateDirectories: true)
@@ -183,7 +176,7 @@ extension Presentation {
             types.rootElement()!.addChild(entry); try types.xmlData.write(to: typesURL, options: .atomic)
         }
         let id = nextID(slide)
-        let node = fragment("<p:pic><p:nvPicPr><p:cNvPr id=\"\(id)\" name=\"Ảnh\"/><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed=\"\(rid)\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"roundRect\"><a:avLst><a:gd name=\"adj\" fmla=\"val 5000\"/></a:avLst></a:prstGeom></p:spPr></p:pic>")
+        let node = fragment("<p:pic><p:nvPicPr><p:cNvPr id=\"\(id)\" name=\"Picture\"/><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed=\"\(rid)\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"roundRect\"><a:avLst><a:gd name=\"adj\" fmla=\"val 3000\"/></a:avLst></a:prstGeom></p:spPr></p:pic>")
         slide.tree.addChild(node)
         let item = SlideItem(node: node, id: id, frame: .zero)
         let maxWidth = size.width * (pasted ? 0.46 : 0.6)
@@ -192,8 +185,7 @@ extension Presentation {
         let dimensions = CGSize(width: sourceImage.size.width * ratio, height: sourceImage.size.height * ratio)
         item.updateFrame(CGRect(x: size.width * (pasted ? 0.75 : 0.5) - dimensions.width / 2, y: (size.height - dimensions.height) / 2, width: dimensions.width, height: dimensions.height))
         item.imageURL = media.appendingPathComponent(mediaName); item.order = (slide.items.map(\.order).max() ?? 0) + 1
-        item.geometry = "roundRect"; item.cornerRatio = 0.05   // soft rounded corners
-        setSoftShadow(item)   // and a light shadow under inserted pictures
+        item.geometry = "roundRect"; item.cornerRatio = 0.03   // slightly rounded corners, no shadow
         if pasted { item.enableFade(); slide.timingDirty = true }
         slide.items.append(item)
         return item
@@ -239,7 +231,7 @@ extension Presentation {
     func saveInPlace() throws {
         // Never overwrite changes made to the file by another app (PowerPoint, a sync tool...) since it was opened.
         if let stamp = sourceStamp, let now = Self.modificationDate(of: source), now != stamp {
-            throw AppError.message("File đã bị thay đổi bên ngoài Slidy nên Slidy không ghi đè. Dùng Tệp > Lưu bản sao… để giữ thay đổi, rồi mở lại file.")
+            throw AppError.message("The file was changed outside Slidy, so Slidy won’t overwrite it. Use File > Save a Copy… to keep your changes, then reopen the file.")
         }
         try save(to: source, allowOverwrite: true)
         sourceStamp = Self.modificationDate(of: source)
@@ -249,7 +241,7 @@ extension Presentation {
     }
     func save(to destination: URL, allowOverwrite: Bool = false) throws {
         guard allowOverwrite || destination.resolvingSymlinksInPath() != source.resolvingSymlinksInPath() else {
-            throw AppError.message("Hãy chọn tên khác để lưu bản sao.")
+            throw AppError.message("Choose a different name for the copy.")
         }
         if orderDirty {
             try (try part("ppt/presentation.xml")).xmlData.write(to: folder.appendingPathComponent("ppt/presentation.xml"), options: .atomic)
@@ -275,6 +267,6 @@ extension Presentation {
             } else {
                 try FileManager.default.moveItem(at: temporary, to: destination)
             }
-        } catch { throw AppError.message("Không thể lưu file tại vị trí đã chọn.") }
+        } catch { throw AppError.message("Can’t save the file to that location.") }
     }
 }

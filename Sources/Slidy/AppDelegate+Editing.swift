@@ -91,14 +91,14 @@ extension AppDelegate {
         let plain = slidesWithoutEffects(in: presentation)
         let alert = NSAlert()
         if plain.isEmpty {
-            alert.messageText = "Mọi slide đã có hiệu ứng"
-            alert.informativeText = "Không có slide nào cần áp dụng. Slide đã có hiệu ứng được giữ nguyên."
+            alert.messageText = "All slides already have effects"
+            alert.informativeText = "Nothing to apply. Slides with effects are left as they are."
             alert.addButton(withTitle: "OK"); alert.runModal(); return
         }
         let skipped = presentation.slides.count - plain.count
-        alert.messageText = "Áp dụng Fade cho \(plain.count) slide chưa có hiệu ứng?"
-        alert.informativeText = "Mọi đối tượng trên các slide đó sẽ có hiệu ứng Fade, theo thứ tự từ trên xuống dưới. \(skipped) slide còn lại đã có hiệu ứng hoặc không có đối tượng nên được giữ nguyên. Có thể hoàn tác bằng ⌘Z."
-        alert.addButton(withTitle: "Áp dụng"); alert.addButton(withTitle: "Hủy")
+        alert.messageText = "Apply Fade to \(plain.count) slides without effects?"
+        alert.informativeText = "Every object on those slides gets a Fade, top to bottom. The other \(skipped) slides already have effects (or no objects) and stay as they are. ⌘Z undoes it."
+        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         checkpointAll()
         applyFade(toTopToBottom: plain)
@@ -139,8 +139,8 @@ extension AppDelegate {
     func permitTimingEdit() -> Bool {
         guard let slide = canvas.slide else { return false }
         if slide.originalTiming && !slide.timingDirty && !slide.warnings.isEmpty {
-            let alert = NSAlert(); alert.messageText = "Thay hiệu ứng của slide này bằng Fade?"; alert.informativeText = "Slide có hiệu ứng gốc ngoài phạm vi Fade. Bản sao sẽ dùng thứ tự Fade trong ứng dụng."
-            alert.addButton(withTitle: "Dùng Fade"); alert.addButton(withTitle: "Hủy")
+            let alert = NSAlert(); alert.messageText = "Replace this slide’s effects with Fade?"; alert.informativeText = "This slide has effects other than Fade. Slidy’s Fade order will replace them."
+            alert.addButton(withTitle: "Use Fade"); alert.addButton(withTitle: "Cancel")
             return alert.runModal() == .alertFirstButtonReturn
         }
         return true
@@ -193,7 +193,7 @@ extension AppDelegate {
         canvas.finishEditing(commit: true)
         do { try presentation.moveSlide(from: source, to: destination) } catch { showError(error); return }
         undo.registerUndo(withTarget: self) { target in target.moveSlideInDeck(from: destination, to: source) }
-        undo.setActionName("Đổi thứ tự slide")
+        undo.setActionName("Move Slide")
         index = destination
         thumbnailCache.removeAllObjects()
         table.reloadData()
@@ -211,7 +211,7 @@ extension AppDelegate {
         canvas.finishEditing(commit: true)
         do { try presentation.insertSlide(after: position) } catch { showError(error); return }
         undo.registerUndo(withTarget: self) { $0.removeSlideInDeck(at: position + 1) }
-        undo.setActionName("Thêm slide")
+        undo.setActionName("Add Slide")
         showSlideRow(position + 1)
     }
     func removeSlideInDeck(at position: Int) {
@@ -219,7 +219,7 @@ extension AppDelegate {
         canvas.finishEditing(commit: true)
         do { try presentation.removeInsertedSlide(at: position) } catch { showError(error); return }
         undo.registerUndo(withTarget: self) { $0.insertSlideInDeck(after: position - 1) }
-        undo.setActionName("Thêm slide")
+        undo.setActionName("Add Slide")
         showSlideRow(max(0, min(position - 1, presentation.slides.count - 1)))
     }
     /// Delete in the slide list removes the selected slide (no confirmation: ⌘Z brings it back with its Fade).
@@ -229,7 +229,7 @@ extension AppDelegate {
         let removed: RemovedSlide
         do { removed = try presentation.removeSlide(at: position) } catch { showError(error); return }
         undo.registerUndo(withTarget: self) { $0.restoreSlideInDeck(removed) }
-        undo.setActionName("Xóa slide")
+        undo.setActionName("Delete Slide")
         showSlideRow(min(position, presentation.slides.count - 1))
     }
     func restoreSlideInDeck(_ removed: RemovedSlide) {
@@ -237,7 +237,7 @@ extension AppDelegate {
         canvas.finishEditing(commit: true)
         do { try presentation.restoreSlide(removed) } catch { showError(error); return }
         undo.registerUndo(withTarget: self) { $0.deleteSlideInDeck(at: removed.index) }
-        undo.setActionName("Xóa slide")
+        undo.setActionName("Delete Slide")
         showSlideRow(removed.index)
     }
     private func showSlideRow(_ row: Int) {

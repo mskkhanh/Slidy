@@ -73,9 +73,9 @@ final class Presentation {
     func moveSlide(from source: Int, to destination: Int) throws {
         guard slides.indices.contains(source), slides.indices.contains(destination), source != destination else { return }
         let list = try part("ppt/presentation.xml").rootElement()?.child("sldIdLst")
-        guard let list, slides.allSatisfy({ $0.listEntry != nil }) else { throw AppError.message("Không đổi được thứ tự slide trong file này.") }
+        guard let list, slides.allSatisfy({ $0.listEntry != nil }) else { throw AppError.message("Can’t reorder slides in this file.") }
         if (try part("ppt/presentation.xml")).rootElement()?.descendant("sectionLst") != nil {
-            throw AppError.message("Bài trình chiếu có các Section, Slidy chưa hỗ trợ đổi thứ tự slide trong trường hợp này.")
+            throw AppError.message("This presentation has sections; Slidy can’t reorder slides in it yet.")
         }
         let moved = slides.remove(at: source)
         slides.insert(moved, at: destination)
@@ -103,9 +103,9 @@ final class Presentation {
     }
     private func load() throws {
         let presentation = try part("ppt/presentation.xml")
-        guard let root = presentation.rootElement(), let slideList = root.child("sldIdLst") else { throw AppError.message("File không có danh sách slide hợp lệ.") }
+        guard let root = presentation.rootElement(), let slideList = root.child("sldIdLst") else { throw AppError.message("The file has no valid slide list.") }
         if let s = root.child("sldSz") { size = CGSize(width: s.number("cx") / emu, height: s.number("cy") / emu) }
-        guard size.width > 0, size.height > 0 else { throw AppError.message("Kích thước slide không hợp lệ.") }
+        guard size.width > 0, size.height > 0 else { throw AppError.message("Invalid slide size.") }
         let themePath = related("ppt/presentation.xml", type: "theme") ?? "ppt/theme/theme1.xml"
         if let theme = try? part(themePath).rootElement() {
             for entry in theme.descendant("clrScheme")?.elements ?? [] { colors[entry.localName ?? ""] = color(entry) }
@@ -114,13 +114,13 @@ final class Presentation {
         }
         let rels = relationships("ppt/presentation.xml")
         for entry in slideList.elements {
-            guard let path = rels[entry.attr("r:id") ?? ""] else { throw AppError.message("Thiếu liên kết slide trong file.") }
+            guard let path = rels[entry.attr("r:id") ?? ""] else { throw AppError.message("A slide link is missing in the file.") }
             let slide = Slide(path: path, document: try part(path))
             slide.listEntry = entry
             try parse(slide)
             slides.append(slide)
         }
-        guard !slides.isEmpty else { throw AppError.message("Bài trình chiếu không có slide.") }
+        guard !slides.isEmpty else { throw AppError.message("The presentation has no slides.") }
     }
     func color(_ element: XMLElement?) -> NSColor? {
         guard let element else { return nil }
@@ -138,7 +138,7 @@ final class Presentation {
         return result
     }
     func parse(_ slide: Slide) throws {
-        guard let root = slide.document.rootElement(), let tree = root.child("cSld")?.child("spTree") else { throw AppError.message("Cấu trúc slide không hợp lệ.") }
+        guard let root = slide.document.rootElement(), let tree = root.child("cSld")?.child("spTree") else { throw AppError.message("Invalid slide structure.") }
         slide.items = []; slide.warnings = []
         let layout = related(slide.path, type: "slideLayouts")
         let master = layout.flatMap { related($0, type: "slideMasters") }
@@ -169,8 +169,8 @@ final class Presentation {
                 slide.items.append(item)
             case "graphicFrame":
                 if node.descendant("tbl") != nil { slide.items += parseTable(node) }
-                else { slide.warnings.append("Có biểu đồ hoặc SmartArt chưa được hiển thị.") }
-            case "grpSp": slide.warnings.append("Có nhóm đối tượng chưa được hiển thị.")
+                else { slide.warnings.append("Charts and SmartArt are not shown yet.") }
+            case "grpSp": slide.warnings.append("Grouped shapes are not shown yet.")
             default: break
             }
         }
@@ -207,7 +207,7 @@ final class Presentation {
                 group[0].fadeGroup = nil
             }
             if !timing.descendants("anim").isEmpty || timing.descendants("animEffect").contains(where: { $0.attr("filter") != "fade" }) {
-                slide.warnings.append("Hiệu ứng gốc phức tạp được giữ trong file; ứng dụng chỉ phát Fade.")
+                slide.warnings.append("Complex original effects are kept in the file; Slidy only plays Fade.")
             }
         }
     }

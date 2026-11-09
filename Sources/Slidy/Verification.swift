@@ -500,6 +500,20 @@ enum Verification {
             print("wrote \(arguments[1]); picture at \(item.frame.integral), corner ratio \(item.cornerRatio), shadow \(String(describing: item.shadow))")
         } catch { fputs("\(error)\n", stderr) }
     }
+    /// `--shortcuts out.png`: renders the ⌘/ sheet.
+    static func shortcutsSheet(path: String) {
+        _ = NSApplication.shared
+        let panel = ShortcutsPanel()
+        panel.appearance = NSAppearance(named: .aqua)   // dark text so the render is readable on white
+        guard let content = panel.contentView else { return }
+        panel.setContentSize(NSSize(width: 860, height: 650))
+        panel.orderFront(nil); panel.layoutIfNeeded(); content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
+        content.cacheDisplay(in: content.bounds, to: bitmap)
+        try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        print("wrote \(path) \(content.bounds.size)")
+    }
     static func run() {
         do {
             let arguments = CommandLine.arguments
@@ -780,7 +794,7 @@ enum Verification {
             let reloaded = try Presentation(url: newURL)
             guard reloaded.slides.count == existingStructure.count + 1, reloaded.slides[2].items.count == 2 else { throw AppError.message("New slide has the wrong shape") }
             let newTexts = reloaded.slides[2].items.map(\.text)
-            guard newTexts == ["Tiêu đề", "Nội dung"] || newTexts == ["Nội dung", "Tiêu đề"] else { throw AppError.message("New slide text is wrong: \(newTexts)") }
+            guard newTexts == ["Heading", "Text"] || newTexts == ["Text", "Heading"] else { throw AppError.message("New slide text is wrong: \(newTexts)") }
             func look(_ item: SlideItem) -> String {
                 let font = item.paragraphs.first?.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
                 let colour = (item.paragraphs.first?.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.hex ?? "-"
@@ -802,7 +816,7 @@ enum Verification {
             guard slideRels.contains("slideLayout") else { throw AppError.message("New slide has no layout") }
             // The heading and body boxes hug their text, grow with more lines, shrink back, and survive saving as spAutoFit.
             guard reloaded.slides[2].items.allSatisfy(\.autoFit) else { throw AppError.message("New slide boxes are not auto-fit after saving") }
-            guard let bodyBox = reloaded.slides[2].items.first(where: { $0.text == "Nội dung" }), let headBox = reloaded.slides[2].items.first(where: { $0.text == "Tiêu đề" }) else { throw AppError.message("New slide boxes missing") }
+            guard let bodyBox = reloaded.slides[2].items.first(where: { $0.text == "Text" }), let headBox = reloaded.slides[2].items.first(where: { $0.text == "Heading" }) else { throw AppError.message("New slide boxes missing") }
             guard bodyBox.frame.height < 60, headBox.frame.height < 120, bodyBox.frame.width < 400, headBox.frame.width < 400,
                   bodyBox.frame.height < (reference.items.first { $0.id == bodyBox.id }?.frame.height ?? 1000) else { throw AppError.message("New slide boxes are not snug: body \(bodyBox.frame), heading \(headBox.frame)") }
             let oneLine = bodyBox.frame.height
@@ -810,7 +824,7 @@ enum Verification {
             guard bodyBox.frame.height > oneLine * 2.2 else { throw AppError.message("Box did not grow with more lines: \(oneLine) -> \(bodyBox.frame.height)") }
             reloaded.updateText(bodyBox, text: String(repeating: "chữ dài ", count: 60))
             guard bodyBox.frame.width <= reloaded.size.width - bodyBox.frame.minX, bodyBox.frame.height > oneLine * 3 else { throw AppError.message("Long text should wrap within the margin: \(bodyBox.frame)") }
-            reloaded.updateText(bodyBox, text: "Nội dung")
+            reloaded.updateText(bodyBox, text: "Text")
             guard abs(bodyBox.frame.height - oneLine) < 1.5 else { throw AppError.message("Box did not shrink back: \(bodyBox.frame.height) vs \(oneLine)") }
             // Live: the editor of an auto-fit box grows while lines are typed.
             let liveCanvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
@@ -873,26 +887,27 @@ enum Verification {
                 spaceDoc.setListSpacing(existing, on: false)
                 guard existing.paragraphs.map(\.after) == untouched else { throw AppError.message("Tightening did not restore the list") }
             }
-            // Inserted pictures get rounded corners and a light shadow: standard roundRect and outerShdw, read back, drawn on the layer.
+            // The app speaks English only: no Vietnamese in the shortcut list or in any UI string a new object brings along.
+            guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
+            // The ⌘/ list is complete and short.
+            let shortcutText = Shortcuts.sections.flatMap { $0.items }.map { "\($0.keys) \($0.action)" }
+            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘C ⌘X ⌘V", "⌘G", "⌘B", "⌘L", "⌘0", "⌘/", "⌘E", "⌘F · ⌘Enter", "Return", "Delete", "Pinch", "1 + Space", "T · H"] {
+                guard shortcutText.contains(where: { $0.contains(required) }) else { throw AppError.message("Shortcut list is missing \(required)") }
+            }
+            guard Shortcuts.sections.flatMap({ $0.items }).allSatisfy({ $0.action.count <= 90 }) else { throw AppError.message("A shortcut description is too long") }
+            // Inserted pictures get slightly rounded corners (standard roundRect) and no shadow.
             let shadowDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
-            let pictureURL = output.appendingPathComponent("shadow-test.png")
+            let pictureURL = output.appendingPathComponent("round-test.png")
             let pictureBitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 80, pixelsHigh: 60, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
             try pictureBitmap.representation(using: .png, properties: [:])!.write(to: pictureURL)
             let insertedPicture = try shadowDoc.addImage(to: shadowDoc.slides[1], url: pictureURL)
-            guard let shadow = insertedPicture.shadow, shadow.blur > 5, shadow.dy > 2, shadow.dx == 0, shadow.color.alphaComponent > 0.1, shadow.color.alphaComponent < 0.4 else { throw AppError.message("Picture has no light shadow: \(String(describing: insertedPicture.shadow))") }
-            let shadowURL = output.appendingPathComponent("shadow.pptx")
-            try shadowDoc.save(to: shadowURL)
-            guard let savedPicture = try Presentation(url: shadowURL).slides[1].items.first(where: { $0.id == insertedPicture.id }), let saved = savedPicture.shadow,
-                  abs(saved.blur - shadow.blur) < 0.5, abs(saved.dy - shadow.dy) < 0.5 else { throw AppError.message("Shadow did not survive saving") }
-            let xmlText = shadowDoc.slides[1].document.xmlString
-            guard xmlText.contains("<a:outerShdw"), xmlText.contains("</a:prstGeom><a:effectLst>") else { throw AppError.message("Shadow is not written as a standard effect list") }
-            let shadowView = ObjectView(item: savedPicture, presentation: shadowDoc, canvas: nil)
-            guard let layer = shadowView.layer, layer.shadowOpacity > 0.1, layer.shadowRadius > 3, !layer.masksToBounds,
-                  (layer.isGeometryFlipped ? layer.shadowOffset.height > 0 : layer.shadowOffset.height < 0) else { throw AppError.message("Layer shadow is not set up (opacity \(shadowView.layer?.shadowOpacity ?? -1), offset \(String(describing: shadowView.layer?.shadowOffset)))") }
-            guard savedPicture.geometry == "roundRect", savedPicture.cornerRatio > 0.02, savedPicture.cornerRatio < 0.2,
-                  xmlText.contains("prst=\"roundRect\"") else { throw AppError.message("Picture corners are not rounded: \(savedPicture.geometry) \(savedPicture.cornerRatio)") }
-            print("  picture layer: geometry flipped \(shadowView.layer?.isGeometryFlipped ?? false), shadow offset \(String(describing: shadowView.layer?.shadowOffset)), radius \(shadowView.layer?.shadowRadius ?? 0), opacity \(shadowView.layer?.shadowOpacity ?? 0)")
-            guard shadowDoc.slides[0].items.filter({ $0.imageURL != nil }).allSatisfy({ $0.shadow == nil }) else { throw AppError.message("Existing pictures must not get a shadow") }
+            guard insertedPicture.shadow == nil, !shadowDoc.slides[1].document.xmlString.contains("<a:outerShdw") else { throw AppError.message("Inserted pictures must not get a shadow") }
+            let roundURL = output.appendingPathComponent("round.pptx")
+            try shadowDoc.save(to: roundURL)
+            guard let savedPicture = try Presentation(url: roundURL).slides[1].items.first(where: { $0.id == insertedPicture.id }),
+                  savedPicture.geometry == "roundRect", savedPicture.cornerRatio > 0.01, savedPicture.cornerRatio < 0.06,
+                  shadowDoc.slides[1].document.xmlString.contains("prst=\"roundRect\"") else { throw AppError.message("Picture corners are not slightly rounded") }
+            guard shadowDoc.slides[0].items.filter({ $0.imageURL != nil }).allSatisfy({ $0.geometry != "roundRect" }) else { throw AppError.message("Existing pictures must keep their own corners") }
             // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
             let deleteURL = output.appendingPathComponent("delete.pptx")
             try? FileManager.default.removeItem(at: deleteURL)

@@ -32,7 +32,7 @@ extension XMLElement {
 }
 func xml(_ text: String) throws -> XMLDocument {
     let doc = try XMLDocument(xmlString: text, options: [.nodePreserveAll, .nodeLoadExternalEntitiesNever])
-    guard doc.dtd == nil else { throw AppError.message("File XML chứa DTD không được hỗ trợ.") }
+    guard doc.dtd == nil else { throw AppError.message("XML with a DTD is not supported.") }
     return doc
 }
 func readXML(_ url: URL) throws -> XMLDocument { try xml(String(contentsOf: url, encoding: .utf8)) }

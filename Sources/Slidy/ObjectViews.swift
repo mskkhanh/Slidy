@@ -21,7 +21,7 @@ final class ObjectView: NSView {
         applyShadow()
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
-        setAccessibilityLabel(item.text.isEmpty ? "Ảnh hoặc hình" : item.text)
+        setAccessibilityLabel(item.text.isEmpty ? "Picture or shape" : item.text)
     }
     required init?(coder: NSCoder) { fatalError() }
     /// The object's own shadow lives on its layer, so it fades in and out together with the object when presenting.
@@ -170,7 +170,7 @@ final class OrderBadgeView: NSView {
         let size = text.size()
         let numberCentre = grouped ? height / 2 : bounds.midX
         text.draw(at: NSPoint(x: numberCentre - size.width / 2, y: bounds.midY - size.height / 2))
-        guard grouped, let symbol = NSImage(systemSymbolName: "link", accessibilityDescription: "Nhóm"),
+        guard grouped, let symbol = NSImage(systemSymbolName: "link", accessibilityDescription: "Group"),
               let configured = symbol.withSymbolConfiguration(.init(pointSize: height * 0.5, weight: .semibold)) else { return }
         let tinted = configured.copy() as! NSImage
         tinted.lockFocus(); NSColor.white.set(); NSRect(origin: .zero, size: tinted.size).fill(using: .sourceIn); tinted.unlockFocus()

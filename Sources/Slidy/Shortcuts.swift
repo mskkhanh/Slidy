@@ -5,91 +5,99 @@ enum Shortcuts {
     static let sections: [(title: String, items: [(keys: String, action: String)])] = [
         ("File", [
             ("⌘O", "Open a presentation"),
-            ("⌘E", "Show recent files in the left column (Esc or ⌘E to return to the slides)"),
-            ("⌘S", "Save a copy (changes are always autosaved to the original file)"),
+            ("⌘E", "Recent files in the left column (Esc or ⌘E to go back)"),
+            ("⌘S", "Save a copy (changes autosave to the original file)"),
             ("⌘Q", "Quit")
         ]),
         ("Edit", [
-            ("⌘Z / ⇧⌘Z", "Undo / Redo"),
-            ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste. Select objects (or a table), ⌘C, go to another slide, ⌘V: they land in the same place with the same look; pasted on their own slide they shift a little. Images paste too"),
+            ("⌘Z / ⇧⌘Z", "Undo / redo"),
+            ("⌘C ⌘X ⌘V", "Copy / cut / paste objects, tables, pictures (also onto another slide)"),
             ("⌘A", "Select all objects on the slide"),
-            ("Delete", "With the slide list focused: delete the selected slide (no prompt; ⌘Z brings it back with its Fade). The last remaining slide cannot be deleted"),
-            ("Return", "With the slide list focused: add a new slide after the selected one (heading and text box styled like your other slides; their boxes hug the text and grow or shrink as you type; ⌘Z removes it)"),
-            ("⌘↑ / ⌘↓", "Go to the previous / next slide while editing; with the slide list focused (click a slide on the left), move that slide up / down in the deck")
+            ("⌘G", "Group / ungroup the Fade of the selected objects"),
+            ("Delete", "Delete the selected objects (a table goes whole)")
         ]),
-        ("Insert and effects", [
-            ("T", "Add a text box"),
-            ("Edit menu", "Spread / tighten the space between the items of the selected lists (new lists are spread by default; lists already in the deck only change when you ask)"),
-            ("H", "Add a heading"),
-            ("F", "Toggle Fade: remove it if every selected object has it (e.g. ⌘A then F clears the slide), otherwise add it"),
-            ("wand button", "Top right: apply Fade, top to bottom, to slides that have no effect yet; slides you already animated are left alone (⌘Z undoes it)"),
-            ("⌘G", "Group / ungroup the Fade of the selected objects: they play together and show one number with a link icon"),
-            ("⇧↑ / ⇧↓", "Move the selected objects' Fade effect earlier / later (the order badges update). Works when the selection has Fade; ⌥⌘↑ / ⌥⌘↓ do the same. ⌘↑ / ⌘↓ switch slides"),
+        ("Objects", [
+            ("Click · ⇧-click", "Select · add or remove from the selection"),
+            ("⌥-click", "Select the object underneath (repeat to go deeper)"),
+            ("Drag · handle", "Move · resize, with snapping guides (hold ⌘ for none)"),
+            ("← ↑ ↓ →", "Nudge 1 pt (⇧ for 10 pt)"),
+            ("T · H", "Add a text box · a heading"),
+            ("F", "Toggle Fade (⌘A then F clears a slide)"),
+            ("⇧↑ / ⇧↓", "Move the Fade earlier / later (⌥⌘↑/↓ also work)"),
+            ("Wand button", "Fade for slides that have no effect yet (top right)")
         ]),
-        ("Objects on the slide", [
-            ("Click / ⇧-click", "Select an object / add or remove it from the selection (a marquee selects objects it fully encloses)"),
-            ("Drag / resize", "Moving or resizing (corner handle) shows alignment guides that snap to other objects and the slide (hold ⌘ to move or resize freely)"),
-            ("⌥-click", "Select the object underneath (e.g. a card behind its text); repeat to go deeper"),
-            ("Enter", "Edit the text of the selected object"),
-            ("⇧Enter", "New line inside a text box"),
-            ("1 + Space", "While editing text: start a numbered list (also 1. + Space); Return continues the numbers, Return on an empty item ends the list. - + Space starts a bullet list"),
-            ("Esc", "Stop editing text"),
-            ("← ↑ ↓ →", "Nudge the object 1 px (hold ⇧ for 10 px)"),
-            ("⌫", "Delete the selected objects; clicking a table cell selects the whole table: drag it to move the table (guides and ⌘ work as for other objects), Delete removes it (⌘Z restores it); double-click a cell to edit its text")
+        ("Text", [
+            ("Enter · Esc", "Edit the selected object's text · stop editing"),
+            ("⇧Enter", "New line inside a paragraph"),
+            ("- + Space", "Start a bullet list"),
+            ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)"),
+            ("Edit menu", "Spread / tighten the items of a list")
         ]),
-        ("Presenting", [
-            ("⌘F hoặc ⌘Enter", "Present from the current slide (also the Play button, top right)"),
-            ("→ ↓ Space Enter", "Next step"),
-            ("← ↑", "Previous step (or the previous slide, shown complete)"),
-            ("delete ⌫", "Back to the previous slide, shown complete with all its elements"),
-            ("⌘↓ / ⌘↑", "Jump to the next / previous slide, shown complete with all its elements"),
-            ("Esc", "Exit the presentation")
+        ("Slides", [
+            ("⌘↑ / ⌘↓", "Previous / next slide while editing"),
+            ("Return", "Slide list focused: add a slide after the selected one"),
+            ("Delete", "Slide list focused: delete the selected slide"),
+            ("⌘↑ / ⌘↓", "Slide list focused: move the selected slide up / down"),
+            ("Drag a slide", "Reorder slides in the left column")
         ]),
         ("View", [
-            ("⌘B", "Hide / show the left sidebar"),
-            ("Drag a slide", "In the left column, drag a thumbnail to a new place to reorder slides (⌘Z undoes it)"),
-            ("Pinch", "Zoom in / out around the pointer (trackpad); two-finger scroll moves the slide while zoomed in"),
-            ("⌘0", "Fit the slide to the window (reset zoom)"),
-            ("⌘L", "Switch night / light mode (also the moon / sun button, top right; display only, never changes the file)")
+            ("⌘B", "Hide / show the left column"),
+            ("Pinch", "Zoom around the pointer (two-finger scroll pans)"),
+            ("⌘0", "Fit the slide to the window"),
+            ("⌘L", "Night / light mode (display only)"),
+            ("⌘/", "This list")
         ]),
-        ("Help", [
-            ("⌘/", "Show / hide this shortcut sheet")
+        ("Presenting", [
+            ("⌘F · ⌘Enter", "Present from this slide (Play button, top right)"),
+            ("→ ↓ Space Enter", "Next step"),
+            ("← ↑", "Previous step"),
+            ("⌫ · ⌘↑", "Previous slide, shown complete"),
+            ("⌘↓", "Next slide, shown complete"),
+            ("Esc", "Exit")
         ])
     ]
 }
 
 final class ShortcutsPanel: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 520, height: 560), styleMask: [.titled], backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 860, height: 650), styleMask: [.titled], backing: .buffered, defer: false)
         title = "Keyboard Shortcuts"
         let heading = NSTextField(labelWithString: "Keyboard Shortcuts")
         heading.font = .systemFont(ofSize: 18, weight: .semibold)
-        let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 6
-        for section in Shortcuts.sections {
-            let header = NSTextField(labelWithString: section.title.uppercased())
-            header.font = .systemFont(ofSize: 11, weight: .semibold); header.textColor = .secondaryLabelColor
-            stack.addArrangedSubview(header)
-            stack.setCustomSpacing(10, after: stack.views.last ?? header)
-            for item in section.items {
-                let keys = NSTextField(labelWithString: item.keys)
-                keys.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
-                keys.widthAnchor.constraint(equalToConstant: 140).isActive = true
-                let action = NSTextField(wrappingLabelWithString: item.action)
-                action.font = .systemFont(ofSize: 12)
-                let row = NSStackView(views: [keys, action]); row.alignment = .firstBaseline; row.spacing = 12
-                stack.addArrangedSubview(row)
+        // Two columns so the whole list is visible at once.
+        func column(_ sections: ArraySlice<(title: String, items: [(keys: String, action: String)])>) -> NSStackView {
+            let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 4
+            for section in sections {
+                let header = NSTextField(labelWithString: section.title.uppercased())
+                header.font = .systemFont(ofSize: 11, weight: .semibold); header.textColor = .secondaryLabelColor
+                if !stack.views.isEmpty { stack.setCustomSpacing(14, after: stack.views.last!) }
+                stack.addArrangedSubview(header)
+                stack.setCustomSpacing(7, after: header)
+                for item in section.items {
+                    let keys = NSTextField(labelWithString: item.keys)
+                    keys.font = .monospacedSystemFont(ofSize: 11.5, weight: .medium)
+                    keys.widthAnchor.constraint(equalToConstant: 112).isActive = true
+                    let action = NSTextField(wrappingLabelWithString: item.action)
+                    action.font = .systemFont(ofSize: 12)
+                    action.preferredMaxLayoutWidth = 285
+                    action.widthAnchor.constraint(lessThanOrEqualToConstant: 285).isActive = true
+                    let row = NSStackView(views: [keys, action]); row.alignment = .firstBaseline; row.spacing = 10
+                    stack.addArrangedSubview(row)
+                }
             }
-            stack.setCustomSpacing(16, after: stack.views.last ?? header)
+            return stack
         }
+        let split = 3
+        let columns = NSStackView(views: [column(Shortcuts.sections[..<split]), column(Shortcuts.sections[split...])])
+        columns.orientation = .horizontal; columns.alignment = .top; columns.spacing = 36
         let flipped = FlippedView(); flipped.translatesAutoresizingMaskIntoConstraints = false
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        flipped.addSubview(stack)
+        columns.translatesAutoresizingMaskIntoConstraints = false
+        flipped.addSubview(columns)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: flipped.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: flipped.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: flipped.topAnchor, constant: 8),
-            stack.bottomAnchor.constraint(equalTo: flipped.bottomAnchor, constant: -12),
-            flipped.widthAnchor.constraint(equalToConstant: 500)
+            columns.leadingAnchor.constraint(equalTo: flipped.leadingAnchor, constant: 20),
+            columns.topAnchor.constraint(equalTo: flipped.topAnchor, constant: 8),
+            columns.bottomAnchor.constraint(equalTo: flipped.bottomAnchor, constant: -12),
+            flipped.widthAnchor.constraint(equalToConstant: 840)
         ])
         let scroll = NSScrollView(); scroll.documentView = flipped; scroll.hasVerticalScroller = true; scroll.drawsBackground = false
         let close = NSButton(title: "Close", target: self, action: #selector(closeSheet))

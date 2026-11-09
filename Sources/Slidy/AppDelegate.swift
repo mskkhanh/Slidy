@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var canvasLeadingClosed: NSLayoutConstraint!
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false
-    let emptyRecents = NSTextField(wrappingLabelWithString: "Chưa có bài trình chiếu nào.\nBấm ⌘O để mở một file .pptx.")
+    let emptyRecents = NSTextField(wrappingLabelWithString: "No recent files.\nPress ⌘O to open a .pptx.")
     let detail = NSTextField(labelWithString: "")
     let undo = UndoManager()
     var presentation: Presentation?
@@ -92,19 +92,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         status.isHidden = true
         nightButton.isBordered = false; nightButton.target = self; nightButton.action = #selector(toggleNight)
-        nightButton.setAccessibilityLabel("Chế độ tối / sáng")
+        nightButton.setAccessibilityLabel("Night / Light Mode")
         updateNightButton()
-        playButton.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Trình chiếu")
+        playButton.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: "Present")
         playButton.isBordered = false; playButton.target = self; playButton.action = #selector(presentSlides)
         playButton.contentTintColor = .secondaryLabelColor
-        playButton.toolTip = "Trình chiếu từ slide hiện tại (⌘F)"
-        playButton.setAccessibilityLabel("Trình chiếu")
-        fadeAllButton.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Fade cho mọi slide")
-            ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade cho mọi slide")
+        playButton.toolTip = "Present (⌘F)"
+        playButton.setAccessibilityLabel("Present")
+        fadeAllButton.image = NSImage(systemSymbolName: "wand.and.stars", accessibilityDescription: "Fade All Slides")
+            ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade All Slides")
         fadeAllButton.isBordered = false; fadeAllButton.target = self; fadeAllButton.action = #selector(fadeAllSlides)
         fadeAllButton.contentTintColor = .secondaryLabelColor
-        fadeAllButton.toolTip = "Áp dụng Fade (từ trên xuống dưới) cho các slide chưa có hiệu ứng nào; slide đã có hiệu ứng được giữ nguyên (⌘Z để hoàn tác)"
-        fadeAllButton.setAccessibilityLabel("Fade cho mọi slide")
+        fadeAllButton.toolTip = "Fade slides without effects"
+        fadeAllButton.setAccessibilityLabel("Fade All Slides")
         let toolbar = NSStackView(views: [fadeAllButton, nightButton, playButton])
         toolbar.orientation = .horizontal; toolbar.spacing = 10
         toolbar.translatesAutoresizingMaskIntoConstraints = false
@@ -140,9 +140,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         canvas.onChanged = { [weak self] in self?.didChange() }
         canvas.onDelete = { [weak self] in self?.deleteObject() }
         let context = NSMenu()
-        context.addItem(menuItem("Đưa lên trước", #selector(bringForward)))
-        context.addItem(menuItem("Đưa ra sau", #selector(sendBackward)))
-        context.addItem(.separator()); context.addItem(menuItem("Xóa đối tượng", #selector(deleteObject)))
+        context.addItem(menuItem("Bring Forward", #selector(bringForward)))
+        context.addItem(menuItem("Send Backward", #selector(sendBackward)))
+        context.addItem(.separator()); context.addItem(menuItem("Delete", #selector(deleteObject)))
         canvas.objectMenu = context
         window.setContentSize(NSSize(width: 1100, height: 700))
         window.setFrameUsingName(windowFrameName)
@@ -170,9 +170,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         // Quit is immediate. The only time it stops is when edits could not be written to the file.
         guard !flushSave(silent: true) else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = "Không lưu được thay đổi vào file."
-        alert.informativeText = "Thoát bây giờ sẽ mất các thay đổi chưa lưu. Dùng Tệp > Lưu bản sao… để giữ lại chúng."
-        alert.addButton(withTitle: "Ở lại"); alert.addButton(withTitle: "Thoát không lưu")
+        alert.messageText = "Can’t save your changes to the file."
+        alert.informativeText = "Quitting now loses unsaved changes. Use File > Save a Copy… to keep them."
+        alert.addButton(withTitle: "Stay"); alert.addButton(withTitle: "Quit Without Saving")
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
     func applicationWillTerminate(_ notification: Notification) { presentation?.discardWorkFolder() }
@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         #if DEBUG
         if CommandLine.arguments.contains("--verify") { Verification.run(); return }
         if let at = CommandLine.arguments.firstIndex(of: "--overflow"), CommandLine.arguments.count > at + 1 { Verification.overflow(path: CommandLine.arguments[at + 1]); return }
+        if let at = CommandLine.arguments.firstIndex(of: "--shortcuts"), CommandLine.arguments.count > at + 1 { Verification.shortcutsSheet(path: CommandLine.arguments[at + 1]); return }
         if let at = CommandLine.arguments.firstIndex(of: "--snap"), CommandLine.arguments.count > at + 2 { Verification.snap(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
         if let at = CommandLine.arguments.firstIndex(of: "--drive"), CommandLine.arguments.count > at + 3 { Verification.drive(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
         if let at = CommandLine.arguments.firstIndex(of: "--select"), CommandLine.arguments.count > at + 3 { Verification.select(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
