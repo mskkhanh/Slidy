@@ -216,6 +216,22 @@ enum Verification {
             }
             return
         }
+        if ProcessInfo.processInfo.environment["SIDEBAR"] != nil {   // ⌘B slides the left column out and in smoothly
+            delegate.window.layoutIfNeeded()
+            let open = delegate.canvas.frame.minX
+            delegate.setSidebarHidden(false, remember: false, animated: false); delegate.window.layoutIfNeeded()
+            delegate.setSidebarHidden(true, remember: false)
+            var samples: [Int] = []
+            for _ in 0..<8 { RunLoop.current.run(until: Date().addingTimeInterval(0.04)); samples.append(Int(delegate.canvas.frame.minX)) }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            print("  sliding out: slide area left edge over time \(samples), at rest \(Int(delegate.canvas.frame.minX)) (open was \(Int(open))), column hidden \(delegate.sidebarViews.allSatisfy { $0.isHidden })")
+            delegate.setSidebarHidden(false, remember: false)
+            var back: [Int] = []
+            for _ in 0..<8 { RunLoop.current.run(until: Date().addingTimeInterval(0.04)); back.append(Int(delegate.canvas.frame.minX)) }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            print("  sliding in: \(back), at rest \(Int(delegate.canvas.frame.minX)), column visible \(delegate.sidebarViews.allSatisfy { !$0.isHidden })")
+            return
+        }
         if ProcessInfo.processInfo.environment["WAND"] != nil {   // the wand button: only slides without effects get Fade
             let before = presentation.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
             let plain = delegate.slidesWithoutEffects(in: presentation)

@@ -56,12 +56,26 @@ extension AppDelegate {
     }
     @objc func fitZoom() { canvas.resetZoom() }
     @objc func toggleSidebar() { setSidebarHidden(!sidebarHidden) }
-    func setSidebarHidden(_ hidden: Bool, remember: Bool = true) {
+    /// ⌘B: the left column slides out to the left (and back in) while the slide area grows and shrinks with it.
+    func setSidebarHidden(_ hidden: Bool, remember: Bool = true, animated: Bool = true) {
         sidebarHidden = hidden
-        sidebarViews.forEach { $0.isHidden = hidden }
-        canvasLeadingOpen.isActive = !hidden; canvasLeadingClosed.isActive = hidden
         emptyRecents.isHidden = hidden || !(recentsMode && recentSidebarEntries.isEmpty)
         if remember { UserDefaults.standard.set(hidden, forKey: "sidebarHidden") }
+        let target: CGFloat = hidden ? -Self.sidebarOffset : 0
+        guard animated, window?.isVisible == true else {
+            sidebarLeading.constant = target
+            sidebarViews.forEach { $0.isHidden = hidden }
+            return
+        }
+        if !hidden { sidebarViews.forEach { $0.isHidden = false } }   // visible before it slides in
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            sidebarLeading.animator().constant = target
+        }, completionHandler: { [weak self] in
+            guard let self, self.sidebarHidden == hidden else { return }
+            self.sidebarViews.forEach { $0.isHidden = hidden }   // out of the way (and of focus) once it is off screen
+        })
     }
     @objc func toggleShortcuts() {
         if let sheet = window.attachedSheet {
