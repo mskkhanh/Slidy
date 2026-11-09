@@ -2,10 +2,11 @@ import AppKit
 import ArchiveBridge
 
 extension Presentation {
-    func updateText(_ item: SlideItem, text: String, bulletRows: Set<Int>? = nil) {
+    func updateText(_ item: SlideItem, text: String, bulletRows: Set<Int>? = nil, numberedRows: Set<Int>? = nil) {
         guard let body = item.textBody else { return }
         let previousBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
-        guard text != item.text || (bulletRows.map { $0 != previousBullets } ?? false) else { return }
+        let previousNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
+        guard text != item.text || (bulletRows.map { $0 != previousBullets } ?? false) || (numberedRows.map { $0 != previousNumbered } ?? false) else { return }
         let old = body.all("p")
         let lines = text.components(separatedBy: "\n")
         if lines.count != old.count, !item.paragraphDurations.isEmpty {
@@ -58,17 +59,20 @@ extension Presentation {
                 if let ending { p.addChild(ending) }
             }
             let wantsBullet = bulletRows?.contains(index) ?? list
+            let wantsNumber = wantsBullet && (numberedRows?.contains(index) ?? false)
             let hasBullet = p.child("pPr")?.child("buChar") != nil || p.child("pPr")?.child("buAutoNum") != nil
-            if wantsBullet != hasBullet {
+            let hasNumber = p.child("pPr")?.child("buAutoNum") != nil
+            if wantsBullet != hasBullet || (wantsBullet && wantsNumber != hasNumber) {
                 let pp = p.child("pPr") ?? XMLElement(name: "a:pPr")
                 if pp.parent == nil { p.insertChild(pp, at: 0) }
                 for name in ["buNone", "buChar", "buAutoNum"] { pp.child(name)?.detach() }
-                let bullet = fragment(wantsBullet ? "<a:buChar char=\"•\"/>" : "<a:buNone/>")
+                let bullet = fragment(wantsBullet ? (wantsNumber ? "<a:buAutoNum type=\"arabicPeriod\"/>" : "<a:buChar char=\"•\"/>") : "<a:buNone/>")
                 if let next = pp.elements.first(where: { ["tabLst", "defRPr", "extLst"].contains($0.localName ?? "") }) {
                     pp.insertChild(bullet, at: next.index)
                 } else { pp.addChild(bullet) }
-                pp.set("marL", wantsBullet ? "285750" : "0")
-                pp.set("indent", wantsBullet ? "-285750" : "0")
+                let hanging = wantsNumber ? "342900" : "285750"
+                pp.set("marL", wantsBullet ? hanging : "0")
+                pp.set("indent", wantsBullet ? "-" + hanging : "0")
             }
             body.addChild(p)
         }

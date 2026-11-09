@@ -418,7 +418,7 @@ final class CanvasView: NSView {
             attributes[.paragraphStyle] = style
             if index == 0 { firstAttributes = attributes }
             let line = NSMutableAttributedString()
-            if paragraph.bullet != nil { line.append(NSAttributedString(string: "•\t", attributes: attributes)) }
+            if let marker = paragraph.bullet { line.append(NSAttributedString(string: marker + "\t", attributes: attributes)) }
             line.append(text)
             if index < item.paragraphs.count - 1 { line.append(NSAttributedString(string: "\n", attributes: attributes)) }
             line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
@@ -445,7 +445,7 @@ final class CanvasView: NSView {
         objectViews.first { $0.item === item }?.isHidden = true
         updateSelection(); window?.makeFirstResponder(view)
         if selectContents {
-            let start = view.string.hasPrefix("•\t") ? 2 : 0
+            let start = InlineTextView.marker(in: view.string.components(separatedBy: "\n").first ?? "")?.length ?? 0
             view.setSelectedRange(NSRange(location: start, length: (view.string as NSString).length - start))
         }
     }
@@ -453,11 +453,12 @@ final class CanvasView: NSView {
         guard let editor else { return }
         if commit, let item = selected {
             let existingBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
-            let bullets = editor.bulletRows
+            let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
+            let bullets = editor.bulletRows, numbered = editor.numberedRows
             let text = editor.plainText
-            if text != item.text || bullets != existingBullets {
+            if text != item.text || bullets != existingBullets || numbered != existingNumbered {
                 onWillEdit?()
-                presentation?.updateText(item, text: text, bulletRows: bullets)
+                presentation?.updateText(item, text: text, bulletRows: bullets, numberedRows: numbered)
                 if !existingBullets.isEmpty || !bullets.isEmpty { slide?.timingDirty = true }
                 onChanged?()
             }

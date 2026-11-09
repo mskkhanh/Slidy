@@ -9,6 +9,8 @@ let defaultFadeDuration = 0.1
 struct Paragraph {
     var text: NSAttributedString
     var bullet: String?
+    /// A numbered item ("1.", "2." ...) rather than a dot.
+    var isNumbered: Bool { bullet?.first?.isNumber == true }
     var left: CGFloat
     var indent: CGFloat
     var spacing: CGFloat

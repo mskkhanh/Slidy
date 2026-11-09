@@ -29,6 +29,7 @@ enum Shortcuts {
             ("⌥-click", "Select the object underneath (e.g. a card behind its text); repeat to go deeper"),
             ("Enter", "Edit the text of the selected object"),
             ("⇧Enter", "New line inside a text box"),
+            ("1 + Space", "While editing text: start a numbered list (also 1. + Space); Return continues the numbers, Return on an empty item ends the list. - + Space starts a bullet list"),
             ("Esc", "Stop editing text"),
             ("← ↑ ↓ →", "Nudge the object 1 px (hold ⇧ for 10 px)"),
             ("⌫", "Delete the object")

@@ -338,7 +338,7 @@ enum Verification {
                     let editor = probe.makeEditor(for: item)
                     guard let manager = editor.layoutManager, let container = editor.textContainer else { continue }
                     manager.ensureLayout(for: container)
-                    let glyph = item.paragraphs[0].bullet == nil ? 0 : manager.glyphIndexForCharacter(at: 2)
+                    let glyph = item.paragraphs[0].bullet.map { manager.glyphIndexForCharacter(at: $0.count + 1) } ?? 0
                     let rect = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
                     let location = manager.location(forGlyphAt: glyph)
                     let editorX = editor.textContainerOrigin.x + rect.minX + location.x
@@ -347,7 +347,8 @@ enum Verification {
                     let shownX = layout.origin.x + shownRect.minX + layout.manager.location(forGlyphAt: 0).x
                     let shownY = layout.origin.y + shownRect.minY
                     let existingBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
-                    guard editor.plainText == item.text, editor.bulletRows == existingBullets else {
+                    let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
+                    guard editor.plainText == item.text, editor.bulletRows == existingBullets, editor.numberedRows == existingNumbered else {
                         throw AppError.message("Opening the editor would change text on slide \(slideIndex + 1): \(item.text.prefix(30))")
                     }
                     let delta = max(abs(editorX - shownX), abs(editorY - shownY))
@@ -452,6 +453,34 @@ enum Verification {
             guard AppDelegate.slideDropTarget(source: 3, row: 1) == 1, AppDelegate.slideDropTarget(source: 1, row: 4) == 3,
                   AppDelegate.slideDropTarget(source: 2, row: 2) == nil, AppDelegate.slideDropTarget(source: 2, row: 3) == nil,
                   AppDelegate.slideDropTarget(source: 0, row: 24) == 23 else { throw AppError.message("Slide drop position maths is wrong") }
+            // Numbered lists: shown with their numbers in the editor, written as real numbering, renumbered while typing.
+            let listDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
+            let listSlide = listDoc.slides[1]
+            let listItem = listDoc.addText(to: listSlide, list: true)
+            listDoc.updateText(listItem, text: "Một\nHai\nBa", bulletRows: [0, 1, 2], numberedRows: [0, 1, 2])
+            guard listItem.paragraphs.map({ $0.bullet }) == ["1.", "2.", "3."], listItem.paragraphs.allSatisfy(\.isNumbered),
+                  listItem.textBody?.all("p").allSatisfy({ $0.child("pPr")?.child("buAutoNum") != nil }) == true else { throw AppError.message("Numbered list was not written as real numbering") }
+            let numberEditor = CanvasView(frame: CGRect(x: 0, y: 0, width: 960, height: 540)).makeEditor(for: listItem)
+            guard numberEditor.string == "1.\tMột\n2.\tHai\n3.\tBa", numberEditor.numberedRows == [0, 1, 2], numberEditor.plainText == "Một\nHai\nBa" else { throw AppError.message("Editor does not show the numbers: \(numberEditor.string.debugDescription)") }
+            numberEditor.string = "1.\tA\n1.\tB\n•\tC\n1.\tD\n1.\tE"; numberEditor.renumber()
+            guard numberEditor.string == "1.\tA\n2.\tB\n•\tC\n1.\tD\n2.\tE" else { throw AppError.message("Renumbering is wrong: \(numberEditor.string.debugDescription)") }
+            guard InlineTextView.typedNumber("1") == 1, InlineTextView.typedNumber("3.") == 3, InlineTextView.typedNumber("a") == nil, InlineTextView.typedNumber("") == nil, InlineTextView.typedNumber("1234") == nil else { throw AppError.message("Typed number detection is wrong") }
+            // Typing: "1" + Space starts the list, Return continues it, Return on an empty item leaves it.
+            let typing = InlineTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+            func key(_ code: UInt16, _ characters: String) { typing.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1, windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!) }
+            typing.insertText("1", replacementRange: typing.selectedRange()); key(49, " ")
+            guard typing.string == "1.\t" else { throw AppError.message("1 + Space did not start a numbered list: \(typing.string.debugDescription)") }
+            typing.insertText("A", replacementRange: typing.selectedRange()); key(36, "\r")
+            guard typing.string == "1.\tA\n2.\t" else { throw AppError.message("Return did not continue the numbering: \(typing.string.debugDescription)") }
+            key(36, "\r")
+            guard typing.string == "1.\tA\n" else { throw AppError.message("Return on an empty item did not leave the list: \(typing.string.debugDescription)") }
+            let listURL = output.appendingPathComponent("numbers.pptx")
+            try listDoc.save(to: listURL)
+            let listBack = try Presentation(url: listURL)
+            guard let backItem = listBack.slides[1].items.first(where: { $0.id == listItem.id }), backItem.paragraphs.map({ $0.bullet }) == ["1.", "2.", "3."] else { throw AppError.message("Numbered list did not survive saving") }
+            // Editing the text of an existing numbered list keeps it numbered.
+            listBack.updateText(backItem, text: "Một\nHai!\nBa", bulletRows: [0, 1, 2], numberedRows: [0, 1, 2])
+            guard backItem.paragraphs.map({ $0.bullet }) == ["1.", "2.", "3."] else { throw AppError.message("Editing broke the numbering") }
             print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }

@@ -58,13 +58,22 @@ final class SlideSurface: NSView {
 }
 final class InlineTextView: NSTextView {
     var finish: ((Bool) -> Void)?
-    private let bulletPrefix = "•\t"
-    var bulletRows: Set<Int> {
-        Set(string.components(separatedBy: "\n").enumerated().compactMap { $0.element.hasPrefix(bulletPrefix) ? $0.offset : nil })
+    private var renumbering = false
+
+    /// A paragraph that is a list item starts with its marker and a tab: "•<tab>" or "2.<tab>".
+    static func marker(in line: String) -> (length: Int, numbered: Bool)? {
+        if line.hasPrefix("•\t") { return (2, false) }
+        let digits = line.prefix { $0.isASCII && $0.isNumber }
+        guard !digits.isEmpty, digits.count < 4, line.dropFirst(digits.count).hasPrefix(".\t") else { return nil }
+        return (digits.count + 2, true)
     }
+    private var lines: [String] { string.components(separatedBy: "\n") }
+    var bulletRows: Set<Int> { Set(lines.enumerated().compactMap { Self.marker(in: $0.element) != nil ? $0.offset : nil }) }
+    var numberedRows: Set<Int> { Set(lines.enumerated().compactMap { Self.marker(in: $0.element)?.numbered == true ? $0.offset : nil }) }
     var plainText: String {
-        string.components(separatedBy: "\n").map { $0.hasPrefix(bulletPrefix) ? String($0.dropFirst(2)) : $0 }.joined(separator: "\n")
+        lines.map { line in Self.marker(in: line).map { String(line.dropFirst($0.length)) } ?? line }.joined(separator: "\n")
     }
+    /// The text of the current line before the caret.
     private var linePrefixRange: NSRange {
         let text = string as NSString
         let end = selectedRange().location
@@ -72,15 +81,58 @@ final class InlineTextView: NSTextView {
         let start = newline.location == NSNotFound ? 0 : NSMaxRange(newline)
         return NSRange(location: start, length: end - start)
     }
+    private var currentLineRange: NSRange { (string as NSString).lineRange(for: NSRange(location: selectedRange().location, length: 0)) }
+
+    /// Numbered items count 1, 2, 3... within each run of consecutive numbered lines (the first one keeps its number).
+    func renumber() {
+        guard !renumbering, let storage = textStorage else { return }
+        renumbering = true; defer { renumbering = false }
+        let selection = selectedRange()
+        var expected: Int?
+        var shift = 0
+        var location = 0
+        var edits: [(NSRange, String)] = []
+        for line in lines {
+            if let marker = Self.marker(in: line), marker.numbered {
+                let current = Int(line.prefix(marker.length - 2)) ?? 1
+                let number = expected ?? current
+                if number != current { edits.append((NSRange(location: location, length: marker.length - 2), String(number))) }
+                expected = number + 1
+            } else { expected = nil }
+            location += (line as NSString).length + 1
+        }
+        guard !edits.isEmpty else { return }
+        for (range, text) in edits.reversed() { storage.replaceCharacters(in: range, with: text) }
+        for (range, text) in edits where range.location < selection.location { shift += text.count - range.length }
+        setSelectedRange(NSRange(location: max(0, selection.location + shift), length: selection.length))
+    }
+    override func didChangeText() { super.didChangeText(); renumber() }
+
     override func keyDown(with event: NSEvent) {
         let prefix = (string as NSString).substring(with: linePrefixRange)
+        let line = (string as NSString).substring(with: currentLineRange).trimmingCharacters(in: .newlines)
         if event.keyCode == 53 { finish?(false) }
         else if event.keyCode == 36 && event.modifierFlags.contains(.shift) { insertText("\u{2028}", replacementRange: selectedRange()) }
-        else if event.keyCode == 36 && prefix.hasPrefix(bulletPrefix) {
-            insertText("\n" + bulletPrefix, replacementRange: selectedRange())
-        } else if event.characters == " ", prefix == "-", selectedRange().length == 0 {
-            insertText(bulletPrefix, replacementRange: linePrefixRange)
+        else if event.keyCode == 36, let marker = Self.marker(in: prefix) {
+            if line.count == marker.length && selectedRange().length == 0 {
+                // Return on an empty list item leaves the list.
+                insertText("", replacementRange: linePrefixRange)
+            } else {
+                let next = marker.numbered ? "\((Int(prefix.prefix(marker.length - 2)) ?? 0) + 1).\t" : "•\t"
+                insertText("\n" + next, replacementRange: selectedRange())
+            }
+        } else if event.characters == " ", selectedRange().length == 0, prefix == "-" {
+            insertText("•\t", replacementRange: linePrefixRange)
+        } else if event.characters == " ", selectedRange().length == 0, let number = Self.typedNumber(prefix) {
+            // "1" or "1." followed by a space starts a numbered list.
+            insertText("\(number).\t", replacementRange: linePrefixRange)
         } else { super.keyDown(with: event) }
+    }
+    /// "1" or "12." typed alone at the start of a line.
+    static func typedNumber(_ prefix: String) -> Int? {
+        let digits = prefix.hasSuffix(".") ? String(prefix.dropLast()) : prefix
+        guard !digits.isEmpty, digits.count < 3, digits.allSatisfy({ $0.isASCII && $0.isNumber }) else { return nil }
+        return Int(digits)
     }
 }
 

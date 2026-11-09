@@ -224,6 +224,7 @@ final class Presentation {
         let props = body.child("bodyPr")
         item.insets = NSEdgeInsets(top: (props?.number("tIns", 45720) ?? 45720) / emu, left: (props?.number("lIns", 91440) ?? 91440) / emu, bottom: (props?.number("bIns", 45720) ?? 45720) / emu, right: (props?.number("rIns", 91440) ?? 91440) / emu)
         item.anchor = props?.attr("anchor") ?? "t"
+        var autoNumber = 0
         item.paragraphs = body.all("p").enumerated().map { index, p in
             let level = Int(p.child("pPr")?.number("lvl") ?? 0) + 1
             let defaults = body.child("lstStyle")?.child("lvl\(level)pPr") ?? inherited?.child("txBody")?.child("lstStyle")?.child("lvl\(level)pPr")
@@ -236,7 +237,9 @@ final class Presentation {
                 } else if run.localName == "br" { text.append(NSAttributedString(string: "\u{2028}", attributes: attributes(run.child("rPr"), fallback: pr))) }
             }
             let bulletProps = pp?.child("buNone") != nil ? nil : (pp?.child("buChar") ?? pp?.child("buAutoNum") ?? defaults?.child("buChar"))
-            let bullet = bulletProps.map { $0.localName == "buAutoNum" ? "\(index + Int($0.number("startAt", 1)))." : ($0.attr("char") ?? "•") }
+            // Numbered items count within each run of consecutive numbered paragraphs.
+            if bulletProps?.localName == "buAutoNum" { autoNumber += 1 } else { autoNumber = 0 }
+            let bullet = bulletProps.map { $0.localName == "buAutoNum" ? "\(Int($0.number("startAt", 1)) + autoNumber - 1)." : ($0.attr("char") ?? "•") }
             let alignment: NSTextAlignment = ["ctr": .center, "r": .right, "just": .justified][pp?.attr("algn") ?? defaults?.attr("algn") ?? "l"] ?? .left
             let fontSize = (text.length > 0 ? (text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize : nil) ?? 22
             let line = pp?.child("lnSpc") ?? defaults?.child("lnSpc")
