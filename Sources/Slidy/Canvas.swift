@@ -263,7 +263,7 @@ final class CanvasView: NSView {
         let keepsMultiSelection = selection.count > 1 && selection.contains { $0 === target } && !event.modifierFlags.contains(.option)
         if !keepsMultiSelection { selected = target }
         pendingCollapse = keepsMultiSelection ? target : nil
-        if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(); return }
+        if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(at: point); return }
         guard target.canMove else { return }
         dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
         dragFrames = keepsMultiSelection ? Dictionary(uniqueKeysWithValues: selection.filter(\.canMove).map { (ObjectIdentifier($0), $0.frame) }) : [:]
@@ -513,7 +513,8 @@ final class CanvasView: NSView {
         if restartBlink { overlay.caretOn = true }
         overlay.needsDisplay = true
     }
-    func startEditing(selectContents: Bool = false) {
+    /// `point` (slide coordinates) puts the caret where the person double-clicked instead of at the end.
+    func startEditing(selectContents: Bool = false, at point: CGPoint? = nil) {
         guard let item = selected, item.textBody != nil, editor == nil else { return }
         let view = makeEditor(for: item)
         view.finish = { [weak self] commit in self?.finishEditing(commit: commit) }
@@ -523,6 +524,16 @@ final class CanvasView: NSView {
         updateOrderBadges()   // keep the order badges above the editor
         objectViews.first { $0.item === item }?.isHidden = true
         updateSelection(); window?.makeFirstResponder(view)
+        if !selectContents, let point {
+            let inEditor = surface.convert(point, to: view)
+            var location = view.characterIndexForInsertion(at: inEditor)
+            // Never land inside a list marker ("•<tab>" or "2.<tab>"): put the caret after it.
+            let text = view.string as NSString
+            let lineStart = text.lineRange(for: NSRange(location: min(location, text.length), length: 0)).location
+            let line = text.substring(with: text.lineRange(for: NSRange(location: lineStart, length: 0))).trimmingCharacters(in: .newlines)
+            if let marker = InlineTextView.marker(in: line), location < lineStart + marker.length { location = lineStart + marker.length }
+            view.setSelectedRange(NSRange(location: max(0, min(location, text.length)), length: 0))
+        }
         if selectContents {
             let start = InlineTextView.marker(in: view.string.components(separatedBy: "\n").first ?? "")?.length ?? 0
             view.setSelectedRange(NSRange(location: start, length: (view.string as NSString).length - start))

@@ -623,6 +623,21 @@ enum Verification {
                 guard liveCanvas.caretRect == nil else { throw AppError.message("Caret should hide while text is selected") }
                 liveCanvas.finishEditing(commit: false)
             } else { throw AppError.message("Could not start editing the new body box") }
+            // Double-click puts the caret where the click was.
+            reloaded.updateText(bodyBox, text: "Một hai ba\nBốn năm sáu")
+            let clickCanvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
+            clickCanvas.display(reloaded.slides[2], in: reloaded); clickCanvas.layoutSubtreeIfNeeded()
+            func caretLocation(x: CGFloat, y: CGFloat) -> Int? {
+                clickCanvas.selected = bodyBox
+                clickCanvas.startEditing(at: CGPoint(x: bodyBox.frame.minX + x, y: bodyBox.frame.minY + y))
+                defer { clickCanvas.finishEditing(commit: false) }
+                return clickCanvas.editor?.selectedRange().location
+            }
+            let firstLineY = bodyBox.insets.top + 6, secondLineY = bodyBox.frame.height - bodyBox.insets.bottom - 6
+            guard let atStart = caretLocation(x: 1, y: firstLineY), let atEnd = caretLocation(x: bodyBox.frame.width - 1, y: firstLineY),
+                  let middle = caretLocation(x: bodyBox.insets.left + 40, y: firstLineY), let secondLine = caretLocation(x: 1, y: secondLineY) else { throw AppError.message("Could not place the caret by click") }
+            // The body is a list, so every line starts with a two-character marker ("•<tab>") the caret must stay after.
+            guard atStart == 2, atEnd == 12, middle > 2, middle < 12, secondLine == 15 else { throw AppError.message("Caret placed at wrong spots: start \(atStart) end-of-line \(atEnd) middle \(middle) second line \(secondLine)") }
             try withNew.removeInsertedSlide(at: 2)
             try withNew.saveInPlace()
             let afterRemoval = try Presentation(url: newURL)
