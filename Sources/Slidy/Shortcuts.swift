@@ -34,7 +34,7 @@ enum Shortcuts {
             ("1 + Space", "While editing text: start a numbered list (also 1. + Space); Return continues the numbers, Return on an empty item ends the list. - + Space starts a bullet list"),
             ("Esc", "Stop editing text"),
             ("← ↑ ↓ →", "Nudge the object 1 px (hold ⇧ for 10 px)"),
-            ("⌫", "Delete the selected objects; clicking a table cell selects the whole table, so Delete removes the table (⌘Z restores it); double-click a cell to edit its text")
+            ("⌫", "Delete the selected objects; clicking a table cell selects the whole table: drag it to move the table (guides and ⌘ work as for other objects), Delete removes it (⌘Z restores it); double-click a cell to edit its text")
         ]),
         ("Presenting", [
             ("⌘F hoặc ⌘Enter", "Present from the current slide (also the Play button, top right)"),

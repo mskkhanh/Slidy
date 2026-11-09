@@ -57,6 +57,8 @@ final class CanvasView: NSView {
     private var dragOrigin: CGPoint?
     private var dragItem: SlideItem?
     private var dragFrames: [ObjectIdentifier: CGRect] = [:]
+    /// Tables being dragged: their <p:graphicFrame> and its starting offset in EMU.
+    private var dragTables: [(node: XMLElement, x: Double, y: Double)] = []
     private var pendingCollapse: SlideItem?
     private var originalFrame = CGRect.zero
     private var resizeCorner: CGPoint?
@@ -285,10 +287,16 @@ final class CanvasView: NSView {
         if !keepsMultiSelection { select(members(of: target)) }   // a click on a table cell selects the whole table
         pendingCollapse = keepsMultiSelection ? target : nil
         if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(at: point); return }
-        guard target.canMove else { return }
+        guard target.canMove || target.isTableCell else { return }
         dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
-        dragFrames = keepsMultiSelection ? Dictionary(uniqueKeysWithValues: selection.filter(\.canMove).map { (ObjectIdentifier($0), $0.frame) }) : [:]
-        resizeCorner = keepsMultiSelection ? nil : resizeHandle(at: point, for: target)
+        // Several objects, or a table (all its cells), are dragged together from their starting frames.
+        let movesTogether = keepsMultiSelection || target.isTableCell
+        let moving = selection.filter { $0.canMove || $0.isTableCell }
+        dragFrames = movesTogether ? Dictionary(uniqueKeysWithValues: moving.map { (ObjectIdentifier($0), $0.frame) }) : [:]
+        dragTables = []
+        var seenTables = Set<ObjectIdentifier>()
+        for cell in moving { if let table = cell.tableNode, seenTables.insert(ObjectIdentifier(table)).inserted, let off = table.child("xfrm")?.child("off") { dragTables.append((table, off.number("x"), off.number("y"))) } }
+        resizeCorner = movesTogether ? nil : resizeHandle(at: point, for: target)
     }
     func objectMouseDragged(_ view: ObjectView, event: NSEvent) {
         if marqueeStart != nil { updateMarquee(event); return }
@@ -304,10 +312,15 @@ final class CanvasView: NSView {
                 let snap = snapped(union, excluding: Set(dragFrames.keys))
                 dx += snap.dx; dy += snap.dy; overlay.guides = snap.guides
             } else { overlay.guides = [] }
-            for moved in selection where moved.canMove {
+            for moved in selection where moved.canMove || moved.isTableCell {
                 guard var frame = dragFrames[ObjectIdentifier(moved)] else { continue }
                 frame.origin.x += dx; frame.origin.y += dy
-                moved.updateFrame(frame); objectViews.first { $0.item === moved }?.frame = frame
+                if moved.isTableCell { moved.frame = frame } else { moved.updateFrame(frame) }   // cells live inside the table's own frame
+                objectViews.first { $0.item === moved }?.frame = frame
+            }
+            for table in dragTables {
+                guard let off = table.node.child("xfrm")?.child("off") else { continue }
+                off.set("x", String(Int(table.x + Double(dx) * emu))); off.set("y", String(Int(table.y + Double(dy) * emu)))
             }
             updateSelection(); updateOrderBadges()
             return
@@ -408,7 +421,7 @@ final class CanvasView: NSView {
         overlay.guides = []; overlay.needsDisplay = true
         endMarquee()
         if !editedDrag, let clicked = pendingCollapse { select(members(of: clicked)) }
-        pendingCollapse = nil; dragFrames = [:]
+        pendingCollapse = nil; dragFrames = [:]; dragTables = []
         dragOrigin = nil
         if editedDrag { editedDrag = false; rebuild(); onChanged?() }
     }

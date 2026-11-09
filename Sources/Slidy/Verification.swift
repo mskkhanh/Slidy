@@ -148,6 +148,35 @@ enum Verification {
             print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
             return
         }
+        if ProcessInfo.processInfo.environment["DRAGTABLE"] != nil {   // click a table cell and drag: the whole table moves; ⌘Z puts it back
+            let slide = presentation.slides[slideIndex]
+            let cells = slide.items.filter(\.isTableCell)
+            guard let cell = cells.first else { print("  no table on this slide"); return }
+            delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            let scale = delegate.canvas.surface.frame.width / max(1, delegate.canvas.surface.bounds.width)
+            let from = delegate.canvas.surface.convert(CGPoint(x: cell.frame.midX, y: cell.frame.midY), to: nil)
+            let to = CGPoint(x: from.x + 40 * scale, y: from.y - 30 * scale)
+            let n = delegate.window.windowNumber
+            func mouse(_ type: NSEvent.EventType, _ p: CGPoint, _ flags: NSEvent.ModifierFlags = []) -> NSEvent { NSEvent.mouseEvent(with: type, location: p, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 6, clickCount: 1, pressure: 1)! }
+            let before = cells.map(\.frame)
+            let offBefore = cells.first?.tableNode?.child("xfrm")?.child("off")?.attr("x") ?? "?"
+            guard let hit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(from, from: nil)) else { return }
+            var view: NSView? = hit; while let current = view, !(current is ObjectView) { view = current.superview }
+            (view as? ObjectView)?.mouseDown(with: mouse(.leftMouseDown, from))   // ⌘ is held only while dragging: no snapping, exact distance
+            (view as? ObjectView)?.mouseDragged(with: mouse(.leftMouseDragged, to, .command)); (view as? ObjectView)?.mouseUp(with: mouse(.leftMouseUp, to, .command))
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            let moved = slide.items.filter(\.isTableCell)
+            let shifts = Set(zip(before, moved.map(\.frame)).map { "\(Int(($1.minX - $0.minX).rounded())),\(Int(($1.minY - $0.minY).rounded()))" })
+            print("  dragged the table: \(moved.count) cells all moved by \(shifts) (asked 40,-30 would be the on-screen delta); frame offset x \(offBefore) -> \(moved.first?.tableNode?.child("xfrm")?.child("off")?.attr("x") ?? "?")")
+            try? delegate.presentation?.saveInPlace()
+            let reopened = try? Presentation(url: URL(fileURLWithPath: arguments[0]))
+            let savedCells = reopened?.slides[slideIndex].items.filter(\.isTableCell) ?? []
+            print("  saved and reopened: cells in the new place: \(zip(savedCells.map(\.frame), moved.map(\.frame)).allSatisfy { abs($0.minX - $1.minX) < 0.6 && abs($0.minY - $1.minY) < 0.6 })")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            let back = presentation.slides[slideIndex].items.filter(\.isTableCell)
+            print("  after undo: cells back where they were: \(zip(before, back.map(\.frame)).allSatisfy { abs($0.minX - $1.minX) < 0.6 && abs($0.minY - $1.minY) < 0.6 })")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
