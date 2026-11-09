@@ -69,23 +69,39 @@ extension AppDelegate {
         else { selection.forEach { slide.removeFade(from: $0) } }
         didChange()
     }
-    /// Top-right button: every movable object on every slide gets a Fade, numbered from the top of the slide downwards.
-    @objc func fadeAllSlides() {
-        guard let presentation, !busy, showWindow == nil, window.attachedSheet == nil else { return }
-        canvas.finishEditing(commit: true)
-        let alert = NSAlert()
-        alert.messageText = "Áp dụng Fade cho tất cả slide?"
-        alert.informativeText = "Mọi đối tượng trên \(presentation.slides.count) slide sẽ có hiệu ứng Fade, theo thứ tự từ trên xuống dưới. Thứ tự hiệu ứng hiện có sẽ được thay. Có thể hoàn tác bằng ⌘Z."
-        alert.addButton(withTitle: "Áp dụng"); alert.addButton(withTitle: "Hủy")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        checkpointAll()
-        for slide in presentation.slides {
+    /// Slides the wand button will touch: those with objects but no Fade at all. Slides you animated yourself are left alone.
+    func slidesWithoutEffects(in presentation: Presentation) -> [Slide] {
+        presentation.slides.filter { $0.fadeGroups.isEmpty && $0.items.contains(where: \.canMove) }
+    }
+    /// Gives every movable object of `slides` a Fade, numbered from the top of the slide downwards.
+    func applyFade(toTopToBottom slides: [Slide]) {
+        for slide in slides {
             let targets = slide.items.filter(\.canMove).sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }
             guard !targets.isEmpty else { continue }
             slide.items.forEach { $0.order = 0 }
             targets.forEach { slide.removeFade(from: $0) }
             targets.forEach { slide.applyFade(to: [$0]) }
         }
+    }
+    /// Top-right button: slides that have no effect yet get a Fade on every object, top to bottom.
+    /// Slides that already have effects (the ones you set up by hand) are skipped and stay exactly as they are.
+    @objc func fadeAllSlides() {
+        guard let presentation, !busy, showWindow == nil, window.attachedSheet == nil else { return }
+        canvas.finishEditing(commit: true)
+        let plain = slidesWithoutEffects(in: presentation)
+        let alert = NSAlert()
+        if plain.isEmpty {
+            alert.messageText = "Mọi slide đã có hiệu ứng"
+            alert.informativeText = "Không có slide nào cần áp dụng. Slide đã có hiệu ứng được giữ nguyên."
+            alert.addButton(withTitle: "OK"); alert.runModal(); return
+        }
+        let skipped = presentation.slides.count - plain.count
+        alert.messageText = "Áp dụng Fade cho \(plain.count) slide chưa có hiệu ứng?"
+        alert.informativeText = "Mọi đối tượng trên các slide đó sẽ có hiệu ứng Fade, theo thứ tự từ trên xuống dưới. \(skipped) slide còn lại đã có hiệu ứng hoặc không có đối tượng nên được giữ nguyên. Có thể hoàn tác bằng ⌘Z."
+        alert.addButton(withTitle: "Áp dụng"); alert.addButton(withTitle: "Hủy")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        checkpointAll()
+        applyFade(toTopToBottom: plain)
         refreshAllSlides()
     }
     /// ⌘G: groups the selected objects' Fade effects so they play together (one number, one icon), or ungroups them.

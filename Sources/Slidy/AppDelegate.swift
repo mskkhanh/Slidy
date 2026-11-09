@@ -103,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade cho mọi slide")
         fadeAllButton.isBordered = false; fadeAllButton.target = self; fadeAllButton.action = #selector(fadeAllSlides)
         fadeAllButton.contentTintColor = .secondaryLabelColor
-        fadeAllButton.toolTip = "Áp dụng Fade cho mọi đối tượng ở tất cả slide, từ trên xuống dưới (⌘Z để hoàn tác)"
+        fadeAllButton.toolTip = "Áp dụng Fade (từ trên xuống dưới) cho các slide chưa có hiệu ứng nào; slide đã có hiệu ứng được giữ nguyên (⌘Z để hoàn tác)"
         fadeAllButton.setAccessibilityLabel("Fade cho mọi slide")
         let toolbar = NSStackView(views: [fadeAllButton, nightButton, playButton])
         toolbar.orientation = .horizontal; toolbar.spacing = 10

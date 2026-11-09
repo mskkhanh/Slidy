@@ -148,6 +148,20 @@ enum Verification {
             print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
             return
         }
+        if ProcessInfo.processInfo.environment["WAND"] != nil {   // the wand button: only slides without effects get Fade
+            let before = presentation.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
+            let plain = delegate.slidesWithoutEffects(in: presentation)
+            let plainIndexes = Set(presentation.slides.enumerated().filter { slide in plain.contains { $0 === slide.element } }.map(\.offset))
+            delegate.applyFade(toTopToBottom: plain)
+            let after = presentation.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
+            var untouched = 0, changed = 0, wrong: [Int] = []
+            for index in presentation.slides.indices {
+                if plainIndexes.contains(index) { if !after[index].isEmpty { changed += 1 } else { wrong.append(index + 1) } }
+                else if after[index] == before[index] { untouched += 1 } else { wrong.append(index + 1) }
+            }
+            print("  wand: \(plain.count) slides without effects got Fade (\(changed) now have it), \(untouched) slides with effects or no objects untouched, wrong: \(wrong)")
+            return
+        }
         if ProcessInfo.processInfo.environment["RECENTS"] != nil {   // a long file name in the recent files list takes two lines
             let long = "/tmp/Buổi học miễn phí 1 2 (13 11) Lập kế hoạch ngày mai trong 5 phút.pptx"
             let short = "/tmp/Ngắn.pptx"

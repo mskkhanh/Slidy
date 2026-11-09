@@ -27,7 +27,7 @@ extension AppDelegate {
         insert.addItem(menuItem("Văn bản · T", #selector(addText))); insert.addItem(menuItem("Tiêu đề · H", #selector(addHeading))); insert.addItem(menuItem("Danh sách bullet", #selector(addList))); insert.addItem(menuItem("Ảnh…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Trình chiếu"); play.addItem(menuItem("Từ slide hiện tại", #selector(presentSlides), key: "f"))
-        play.addItem(menuItem("Áp dụng Fade cho mọi slide…", #selector(fadeAllSlides)))
+        play.addItem(menuItem("Áp dụng Fade cho slide chưa có hiệu ứng…", #selector(fadeAllSlides)))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
         let view = NSMenu(title: "Xem")
         view.addItem(menuItem("Chế độ tối / sáng", #selector(toggleNight), key: "l"))
