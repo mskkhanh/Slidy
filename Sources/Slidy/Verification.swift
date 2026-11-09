@@ -268,17 +268,14 @@ enum Verification {
             print("  after opening: modified = \(delegate.modified), undo available = \(delegate.undo.canUndo)")
             return
         }
-        if ProcessInfo.processInfo.environment["LINESPACE"] != nil {   // the Edit menu command on a selection, with undo
-            let slide = presentation.slides[slideIndex]
-            guard let item = slide.items.first(where: { $0.canMove && $0.textBody != nil && !$0.text.isEmpty }) else { return }
-            delegate.canvas.select([item]); delegate.window.makeFirstResponder(delegate.canvas)
-            let before = item.paragraphs.map(\.spacing)
-            delegate.loosenLineSpacing(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-            let after = presentation.slides[slideIndex].items.first(where: { $0.id == item.id })?.paragraphs.map(\.spacing) ?? []
-            print("  loosen: line height \(before.map { Int($0) }) -> \(after.map { Int($0) })")
+        if ProcessInfo.processInfo.environment["LISTSPACE"] != nil {   // the Edit menu command on the whole deck, with undo
+            let before = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
+            let changed = delegate.standardizeAllLists(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let after = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
+            print("  standard list spacing: \(changed) lists changed, \(before.count) list paragraphs, line heights \(Set(before.map { Int($0) }).sorted()) -> \(Set(after.map { Int($0) }).sorted())")
             delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-            let undone = presentation.slides[slideIndex].items.first(where: { $0.id == item.id })?.paragraphs.map(\.spacing) ?? []
-            print("  after undo: \(undone.map { Int($0) }), restored: \(zip(before, undone).allSatisfy { abs($0 - $1) < 0.5 })")
+            let undone = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
+            print("  after undo: \(Set(undone.map { Int($0) }).sorted()), restored \(zip(before, undone).allSatisfy { abs($0 - $1) < 0.5 })")
             return
         }
         if ProcessInfo.processInfo.environment["SIDEBAR"] != nil {   // ⌘B slides the left column out and in smoothly
@@ -946,27 +943,33 @@ enum Verification {
             let removedTypes = try String(contentsOf: afterRemoval.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
             guard afterRemoval.slides.count == existingStructure.count, !removedTypes.contains("PartName=\"/\(created.path)\""),
                   !FileManager.default.fileExists(atPath: afterRemoval.folder.appendingPathComponent(created.path).path) else { throw AppError.message("Undoing the new slide left parts behind") }
-            // List spacing: new lists breathe, existing lists change only on request, and it is saved as spcAft.
+            // List spacing: one standard line spacing (1.94 × font size) for every bullet and numbered list.
             let spaceDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
             let spaceSlide = spaceDoc.slides[1]
+            let standardFor: (Double) -> Double = { size in (size * Presentation.listLineFactor / 100).rounded() }   // points
             let newList = spaceDoc.addText(to: spaceSlide, list: true)
             spaceDoc.updateText(newList, text: "Un\nDeux\nTrois", bulletRows: [0, 1, 2])
-            guard newList.paragraphs.allSatisfy({ $0.after > 5 && $0.after < 14 }) else { throw AppError.message("New list items have no room: \(newList.paragraphs.map(\.after))") }
-            let plain = spaceDoc.addText(to: spaceSlide, list: false)
-            spaceDoc.updateText(plain, text: "Un\nDeux", bulletRows: [0, 1])   // text turned into a list by typing "- "
-            guard plain.paragraphs.allSatisfy({ $0.bullet != nil && $0.after > 5 }) else { throw AppError.message("A paragraph turned into a list item got no room") }
-            let existing = spaceSlide.items.first(where: { $0.hasList && $0 !== newList && $0 !== plain && $0.canMove })
-            if let existing {
-                let untouched = existing.paragraphs.map(\.after)
-                guard !untouched.contains(where: { $0 > 0 }) else { throw AppError.message("An existing deck list already had spacing?") }
-                spaceDoc.setListSpacing(existing, on: true)
-                guard existing.paragraphs.filter({ $0.bullet != nil }).allSatisfy({ $0.after > 5 }) else { throw AppError.message("Spreading an existing list failed") }
-                let spaceURL = output.appendingPathComponent("spacing.pptx")
-                try spaceDoc.save(to: spaceURL)
-                guard let backList = try Presentation(url: spaceURL).slides[1].items.first(where: { $0.id == existing.id }), backList.paragraphs.filter({ $0.bullet != nil }).allSatisfy({ $0.after > 5 }) else { throw AppError.message("List spacing did not survive saving") }
-                spaceDoc.setListSpacing(existing, on: false)
-                guard existing.paragraphs.map(\.after) == untouched else { throw AppError.message("Tightening did not restore the list") }
-            }
+            guard newList.paragraphs.allSatisfy({ abs($0.spacing - standardFor(2400)) < 1 }) else { throw AppError.message("New list does not use the standard spacing: \(newList.paragraphs.map(\.spacing))") }
+            let plainText = spaceDoc.addText(to: spaceSlide, list: false)
+            spaceDoc.updateText(plainText, text: "Un\nDeux", bulletRows: [0, 1])   // text turned into a list by typing "- "
+            guard plainText.paragraphs.allSatisfy({ $0.bullet != nil && abs($0.spacing - standardFor(2400)) < 1 }) else { throw AppError.message("A paragraph turned into a list item did not get the standard spacing") }
+            guard newList.paragraphs.allSatisfy({ $0.before == 0 && $0.after == 0 }) else { throw AppError.message("Standard list spacing adds no space before or after") }
+            let existingLists = spaceDoc.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList && $0 !== newList && $0 !== plainText } }
+            let nonListBefore = spaceDoc.slides.flatMap { $0.items.filter { !$0.hasList }.flatMap { $0.paragraphs.map(\.spacing) } }
+            var changedLists = 0
+            for list in existingLists where spaceDoc.standardizeListSpacing(list) { changedLists += 1 }
+            guard changedLists > 0, existingLists.allSatisfy({ list in list.paragraphs.filter({ $0.bullet != nil }).allSatisfy { paragraph in
+                let size = Double((paragraph.text.length > 0 ? (paragraph.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize : nil) ?? 22)
+                return abs(paragraph.spacing - size * Presentation.listLineFactor) < 1.5 } }) else { throw AppError.message("Existing lists did not get the standard spacing") }
+            guard spaceDoc.slides.flatMap({ $0.items.filter { !$0.hasList }.flatMap { $0.paragraphs.map(\.spacing) } }) == nonListBefore else { throw AppError.message("Text that is not a list must keep its spacing") }
+            guard spaceDoc.slides.flatMap({ $0.items.filter(\.isTableCell) }).allSatisfy({ !$0.hasList }) else { throw AppError.message("Table cells must be left alone") }
+            let spaceURL = output.appendingPathComponent("spacing.pptx")
+            try spaceDoc.save(to: spaceURL)
+            let reopenedSpace = try Presentation(url: spaceURL)
+            let savedLists = reopenedSpace.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } }
+            guard savedLists.count == existingLists.count + 2, savedLists.allSatisfy({ $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.before == 0 && $0.after == 0 } }) else { throw AppError.message("List spacing did not survive saving") }
+            // Khanh's measured value: 22 pt text -> 42.59 pt line height.
+            guard abs(Presentation.listLineFactor * 22 - 42.59) < 0.01 else { throw AppError.message("Standard factor is not the measured 4259 / 2200") }
             // The app speaks English only: no Vietnamese in the shortcut list or in any UI string a new object brings along.
             guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
             // The ⌘/ list is complete and short.
@@ -988,19 +991,6 @@ enum Verification {
                   savedPicture.geometry == "roundRect", savedPicture.cornerRatio > 0.01, savedPicture.cornerRatio < 0.06,
                   shadowDoc.slides[1].document.xmlString.contains("prst=\"roundRect\"") else { throw AppError.message("Picture corners are not slightly rounded") }
             guard shadowDoc.slides[0].items.filter({ $0.imageURL != nil }).allSatisfy({ $0.geometry != "roundRect" }) else { throw AppError.message("Existing pictures must keep their own corners") }
-            // Line spacing: one notch looser or tighter, stored as the standard lnSpc, saved and read back.
-            let lineDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
-            let lineSlide = lineDoc.slides[2]
-            guard let spaced = lineSlide.items.first(where: { $0.canMove && $0.textBody != nil && !$0.text.isEmpty }) else { throw AppError.message("No text to test line spacing") }
-            let originalLines = spaced.paragraphs.map(\.spacing)
-            lineDoc.adjustLineSpacing(spaced, step: 0.1)
-            let looser = spaced.paragraphs.map(\.spacing)
-            guard zip(originalLines, looser).allSatisfy({ $1 > $0 * 1.05 && $1 < $0 * 1.2 }) else { throw AppError.message("Line spacing did not loosen by about 10%: \(originalLines) -> \(looser)") }
-            let lineURL = output.appendingPathComponent("linespacing.pptx")
-            try lineDoc.save(to: lineURL)
-            guard let backItem = try Presentation(url: lineURL).slides[2].items.first(where: { $0.id == spaced.id }), zip(looser, backItem.paragraphs.map(\.spacing)).allSatisfy({ abs($0 - $1) < 0.5 }) else { throw AppError.message("Line spacing did not survive saving") }
-            lineDoc.adjustLineSpacing(spaced, step: -0.1)
-            guard zip(originalLines, spaced.paragraphs.map(\.spacing)).allSatisfy({ abs($0 - $1) < $0 * 0.1 }) else { throw AppError.message("Tightening did not roughly restore the spacing") }
             // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
             let deleteURL = output.appendingPathComponent("delete.pptx")
             try? FileManager.default.removeItem(at: deleteURL)

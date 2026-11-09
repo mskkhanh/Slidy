@@ -70,8 +70,8 @@ extension Presentation {
                 if let next = pp.elements.first(where: { ["tabLst", "defRPr", "extLst"].contains($0.localName ?? "") }) {
                     pp.insertChild(bullet, at: next.index)
                 } else { pp.addChild(bullet) }
-                // A paragraph that becomes a list item gets room after it, so lists breathe.
-                if wantsBullet, !hasBullet, pp.child("spcAft") == nil { Self.insertListSpacing(into: pp, paragraph: p) }
+                // A paragraph that becomes a list item gets the standard list line spacing.
+                if wantsBullet, !hasBullet { Self.applyListLineSpacing(to: pp, paragraph: p) }
                 let hanging = wantsNumber ? "342900" : "285750"
                 pp.set("marL", wantsBullet ? hanging : "0")
                 pp.set("indent", wantsBullet ? "-" + hanging : "0")
@@ -109,46 +109,28 @@ extension Presentation {
         item.autoFit = true
         fitFrame(item)
     }
-    /// Space after each list item, as a share of the font size ("a few tens of percent": not too tight, not too loose).
-    static let listSpacingFactor = 0.4
-    /// Puts <a:spcAft> in the right place of <a:pPr>: after the line and before-spacing, before the bullet.
-    static func insertListSpacing(into properties: XMLElement, paragraph: XMLElement) {
+    /// The list line spacing Khanh settled on by eye: line height 1.94 × the font size (42.6 pt for 22 pt text),
+    /// with no extra space before or after a paragraph. It is the default for every bullet and numbered list.
+    static let listLineFactor = 4259.0 / 2200.0
+    /// Sets the standard line spacing on one list paragraph (<a:lnSpc> in points; <a:spcBef> and <a:spcAft> removed).
+    static func applyListLineSpacing(to properties: XMLElement, paragraph: XMLElement) {
         let size = Double(paragraph.child("r")?.child("rPr")?.attr("sz") ?? "2400") ?? 2400
-        let spacing = fragment("<a:spcAft><a:spcPts val=\"\(Int(size * listSpacingFactor))\"/></a:spcAft>")
-        let after = ["buClrTx", "buClr", "buSzTx", "buSzPct", "buSzPts", "buFontTx", "buFont", "buNone", "buAutoNum", "buChar", "buBlip", "tabLst", "defRPr", "extLst"]
-        if let next = properties.elements.first(where: { after.contains($0.localName ?? "") }) { properties.insertChild(spacing, at: next.index) }
-        else { properties.addChild(spacing) }
+        properties.child("lnSpc")?.detach(); properties.child("spcBef")?.detach(); properties.child("spcAft")?.detach()
+        properties.insertChild(fragment("<a:lnSpc><a:spcPts val=\"\(Int((size * listLineFactor).rounded()))\"/></a:lnSpc>"), at: 0)
     }
-    /// Turns the extra space between list items on or off for one text object (the person's choice for existing lists).
-    func setListSpacing(_ item: SlideItem, on: Bool) {
-        guard let body = item.textBody else { return }
+    /// Gives every list paragraph of a text object the standard spacing. Returns true when something changed.
+    @discardableResult
+    func standardizeListSpacing(_ item: SlideItem) -> Bool {
+        guard let body = item.textBody else { return false }
+        var changed = false
         for paragraph in body.all("p") {
             guard let properties = paragraph.child("pPr"), properties.child("buChar") != nil || properties.child("buAutoNum") != nil else { continue }
-            properties.child("spcAft")?.detach()
-            if on { Self.insertListSpacing(into: properties, paragraph: paragraph) }
+            let before = properties.xmlString
+            Self.applyListLineSpacing(to: properties, paragraph: paragraph)
+            if properties.xmlString != before { changed = true }
         }
-        configureText(item)
-        fitFrame(item)
-    }
-    /// Loosens (positive `step`) or tightens (negative) the line spacing of a text object by one notch (10%).
-    /// Written as the standard <a:lnSpc>; spacing given in points is scaled, spacing given in percent moves by 10 points of percent.
-    func adjustLineSpacing(_ item: SlideItem, step: Double) {
-        guard let body = item.textBody else { return }
-        for paragraph in body.all("p") {
-            let properties: XMLElement
-            if let existing = paragraph.child("pPr") { properties = existing }
-            else { properties = XMLElement(name: "a:pPr"); paragraph.insertChild(properties, at: 0) }
-            if let points = properties.child("lnSpc")?.child("spcPts"), let value = Double(points.attr("val") ?? "") {
-                points.set("val", String(Int(min(20000, max(800, value * (1 + step))))))
-            } else if let percent = properties.child("lnSpc")?.child("spcPct"), let value = Double(percent.attr("val") ?? "") {
-                percent.set("val", String(Int(min(200000, max(80000, value + step * 100000)))))
-            } else {
-                properties.child("lnSpc")?.detach()
-                properties.insertChild(fragment("<a:lnSpc><a:spcPct val=\"\(Int(100000 + step * 100000))\"/></a:lnSpc>"), at: 0)
-            }
-        }
-        configureText(item)
-        fitFrame(item)
+        if changed { configureText(item); fitFrame(item) }
+        return changed
     }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)
@@ -161,7 +143,7 @@ extension Presentation {
         let fontSize = heading ? 4000 : 2400
         let typeface = heading ? majorFont : minorFont
         let bullet = list ? "<a:buChar char=\"•\"/>" : "<a:buNone/>"
-        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : 3360)\"/></a:lnSpc>\(list ? "<a:spcAft><a:spcPts val=\"\(Int(Double(fontSize) * Self.listSpacingFactor))\"/></a:spcAft>" : "")\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
+        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : (list ? Int((Double(fontSize) * Self.listLineFactor).rounded()) : 3360))\"/></a:lnSpc>\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
         let node = fragment("<p:sp><p:nvSpPr><p:cNvPr id=\"\(id)\" name=\"\(name)\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr lIns=\"0\" rIns=\"0\" tIns=\"0\" bIns=\"0\" wrap=\"square\"/><a:lstStyle/>\(p)</p:txBody></p:sp>")
         slide.tree.addChild(node)
         let item = SlideItem(node: node, id: id, frame: .zero)

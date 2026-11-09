@@ -271,38 +271,28 @@ extension AppDelegate {
 }
 
 extension AppDelegate {
-    /// Your choice for lists already in the deck: spread the items a little, or put them back as they were.
-    @objc func toggleListSpacing() {
-        guard !busy, canvas.editor == nil, let slide = canvas.slide, let presentation else { return }
-        let lists = canvas.selection.filter { $0.canMove && $0.hasList && $0.textBody != nil }
-        guard !lists.isEmpty else { NSSound.beep(); return }
-        let spread = lists.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.after > 0 } }
-        checkpoint()
-        lists.forEach { presentation.setListSpacing($0, on: !spread) }
-        canvas.rebuild(); didChange()
-    }
-}
-
-extension AppDelegate {
-    /// Edit menu: loosen / tighten the line spacing of the selected text, or of all text in the deck when nothing is selected.
-    @objc func loosenLineSpacing() { adjustLineSpacing(step: 0.1) }
-    @objc func tightenLineSpacing() { adjustLineSpacing(step: -0.1) }
-    func adjustLineSpacing(step: Double) {
+    /// Edit menu: gives every bullet and numbered list in the deck the standard line spacing (table cells are left alone).
+    @objc func applyStandardListSpacing() {
         guard let presentation, !busy, canvas.editor == nil, showWindow == nil, window.attachedSheet == nil else { return }
-        let selected = canvas.selection.filter { $0.canMove && $0.textBody != nil && !$0.isTableCell }
-        let wholeDeck = selected.isEmpty
-        let targets = wholeDeck ? presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.textBody != nil } } : selected
-        guard !targets.isEmpty else { NSSound.beep(); return }
-        if wholeDeck {   // nothing selected: say what is about to change
-            let alert = NSAlert()
-            alert.messageText = step > 0 ? "Loosen line spacing of all text?" : "Tighten line spacing of all text?"
-            alert.informativeText = "Every text box in the deck changes by one notch (10%). Select objects first to change only those. ⌘Z undoes it."
-            alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-        }
+        guard !listsInDeck(presentation).isEmpty else { NSSound.beep(); return }
         canvas.finishEditing(commit: true)
+        let alert = NSAlert()
+        alert.messageText = "Apply the standard list spacing?"
+        alert.informativeText = "Every bullet and numbered list in the deck gets the same line spacing (line height 1.94 × the font size). ⌘Z undoes it."
+        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        standardizeAllLists()
+    }
+    func listsInDeck(_ presentation: Presentation) -> [SlideItem] {
+        presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList && $0.textBody != nil } }
+    }
+    /// One undo step for the whole deck. Returns how many lists changed.
+    @discardableResult
+    func standardizeAllLists() -> Int {
+        guard let presentation else { return 0 }
         checkpointAll()
-        targets.forEach { presentation.adjustLineSpacing($0, step: step) }
+        let changed = listsInDeck(presentation).filter { presentation.standardizeListSpacing($0) }.count
         refreshAllSlides()
+        return changed
     }
 }
