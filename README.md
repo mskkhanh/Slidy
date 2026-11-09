@@ -33,6 +33,8 @@ This creates `Slidy.app` in the project folder. Copy it to `/Applications` to us
 
 To regenerate the app icon: `./tools/make-icon.sh`.
 
+To smoke-test a build without touching the installed app's recent files or open document: `./tools/smoke.sh deck.pptx` (runs a private copy with its own preferences).
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
