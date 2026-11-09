@@ -16,7 +16,7 @@ struct ParagraphLayout {
 func layoutParagraphs(_ item: SlideItem, night: Bool = false) -> [ParagraphLayout] {
     var y = item.insets.top
     var result: [ParagraphLayout] = []
-    for paragraph in item.paragraphs {
+    for (index, paragraph) in item.paragraphs.enumerated() {
         let content = NSMutableAttributedString(attributedString: night ? NightMode.text(paragraph.text) : paragraph.text)
         let style = NSMutableParagraphStyle()
         style.alignment = paragraph.alignment
@@ -31,7 +31,7 @@ func layoutParagraphs(_ item: SlideItem, night: Bool = false) -> [ParagraphLayou
         manager.addTextContainer(container); storage.addLayoutManager(manager)
         manager.ensureLayout(for: container)
         let height = max(paragraph.spacing, manager.usedRect(for: container).height)
-        y += paragraph.before
+        if index > 0 { y += paragraph.before }
         let attributes = content.length > 0 ? content.attributes(at: 0, effectiveRange: nil) : [.font: NSFont.systemFont(ofSize: 22)]
         result.append(ParagraphLayout(storage: storage, manager: manager, container: container, origin: CGPoint(x: item.insets.left + paragraph.left, y: y), height: height, bullet: paragraph.bullet, bulletX: item.insets.left + paragraph.left + paragraph.indent, attributes: attributes))
         y += height + paragraph.after

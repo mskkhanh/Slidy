@@ -109,13 +109,16 @@ extension Presentation {
         item.autoFit = true
         fitFrame(item)
     }
-    /// The list line spacing Khanh settled on by eye: line height 1.94 × the font size (42.6 pt for 22 pt text),
-    /// with no extra space before or after a paragraph. It is the default for every bullet and numbered list.
-    static let listLineFactor = 4259.0 / 2200.0
-    /// Sets the standard line spacing on one list paragraph (<a:lnSpc> in points; <a:spcBef> and <a:spcAft> removed).
+    /// The list rhythm Khanh settled on by eye: 1.94 × the font size from one paragraph to the next (42.6 pt for 22 pt text).
+    /// Lines inside one paragraph stay compact (1.2 × the font size); the rest of the distance is space before the paragraph.
+    static let listPitchFactor = 4259.0 / 2200.0
+    static let listLineFactor = 1.2
+    static let listGapFactor = listPitchFactor - listLineFactor
+    /// Sets the standard spacing on one list paragraph (<a:lnSpc> and <a:spcBef> in points; <a:spcAft> removed).
     static func applyListLineSpacing(to properties: XMLElement, paragraph: XMLElement) {
         let size = Double(paragraph.child("r")?.child("rPr")?.attr("sz") ?? "2400") ?? 2400
         properties.child("lnSpc")?.detach(); properties.child("spcBef")?.detach(); properties.child("spcAft")?.detach()
+        properties.insertChild(fragment("<a:spcBef><a:spcPts val=\"\(Int((size * listGapFactor).rounded()))\"/></a:spcBef>"), at: 0)
         properties.insertChild(fragment("<a:lnSpc><a:spcPts val=\"\(Int((size * listLineFactor).rounded()))\"/></a:lnSpc>"), at: 0)
     }
     /// Gives every list paragraph of a text object the standard spacing. Returns true when something changed.
@@ -143,7 +146,7 @@ extension Presentation {
         let fontSize = heading ? 4000 : 2400
         let typeface = heading ? majorFont : minorFont
         let bullet = list ? "<a:buChar char=\"•\"/>" : "<a:buNone/>"
-        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : (list ? Int((Double(fontSize) * Self.listLineFactor).rounded()) : 3360))\"/></a:lnSpc>\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
+        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : (list ? Int((Double(fontSize) * Self.listLineFactor).rounded()) : 3360))\"/></a:lnSpc>\(list ? "<a:spcBef><a:spcPts val=\"\(Int((Double(fontSize) * Self.listGapFactor).rounded()))\"/></a:spcBef>" : "")\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
         let node = fragment("<p:sp><p:nvSpPr><p:cNvPr id=\"\(id)\" name=\"\(name)\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr lIns=\"0\" rIns=\"0\" tIns=\"0\" bIns=\"0\" wrap=\"square\"/><a:lstStyle/>\(p)</p:txBody></p:sp>")
         slide.tree.addChild(node)
         let item = SlideItem(node: node, id: id, frame: .zero)

@@ -325,7 +325,7 @@ enum Verification {
                 return abs(p.spacing - size * Presentation.listLineFactor) < 1.5 } }
             print("  after opening: \(lists.count) lists, all standard: \(standard), undo steps: \(delegate.undo.canUndo ? "some" : "none"), modified (not yet saved): \(delegate.modified), save failing: \(delegate.saveFailing)")
             let saved = (try? Presentation(url: URL(fileURLWithPath: arguments[0])))?.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } } ?? []
-            print("  saved file: \(saved.count) lists, all standard: \(saved.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.before == 0 && $0.after == 0 } })")
+            print("  saved file: \(saved.count) lists, all standard: \(saved.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.after == 0 && $0.before > 0 } })")
             let stamp = Presentation.modificationDate(of: URL(fileURLWithPath: arguments[0]))
             RunLoop.current.run(until: Date().addingTimeInterval(2.5))   // no save loop: the file stays as it is
             print("  no further saves: \(Presentation.modificationDate(of: URL(fileURLWithPath: arguments[0])) == stamp)")
@@ -998,7 +998,7 @@ enum Verification {
             let removedTypes = try String(contentsOf: afterRemoval.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
             guard afterRemoval.slides.count == existingStructure.count, !removedTypes.contains("PartName=\"/\(created.path)\""),
                   !FileManager.default.fileExists(atPath: afterRemoval.folder.appendingPathComponent(created.path).path) else { throw AppError.message("Undoing the new slide left parts behind") }
-            // List spacing: one standard line spacing (1.94 × font size) for every bullet and numbered list.
+            // List spacing: one standard line spacing (1.2 × font size inside a paragraph, 1.94 × between paragraphs) for every bullet and numbered list.
             let spaceDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
             let spaceSlide = spaceDoc.slides[1]
             let standardFor: (Double) -> Double = { size in (size * Presentation.listLineFactor / 100).rounded() }   // points
@@ -1008,7 +1008,7 @@ enum Verification {
             let plainText = spaceDoc.addText(to: spaceSlide, list: false)
             spaceDoc.updateText(plainText, text: "Un\nDeux", bulletRows: [0, 1])   // text turned into a list by typing "- "
             guard plainText.paragraphs.allSatisfy({ $0.bullet != nil && abs($0.spacing - standardFor(2400)) < 1 }) else { throw AppError.message("A paragraph turned into a list item did not get the standard spacing") }
-            guard newList.paragraphs.allSatisfy({ $0.before == 0 && $0.after == 0 }) else { throw AppError.message("Standard list spacing adds no space before or after") }
+            guard newList.paragraphs.allSatisfy({ $0.after == 0 && $0.before > 0 }) else { throw AppError.message("Standard list spacing puts the gap before each paragraph and none after") }
             let existingLists = spaceDoc.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList && $0 !== newList && $0 !== plainText } }
             let nonListBefore = spaceDoc.slides.flatMap { $0.items.filter { !$0.hasList }.flatMap { $0.paragraphs.map(\.spacing) } }
             var changedLists = 0
@@ -1022,9 +1022,9 @@ enum Verification {
             try spaceDoc.save(to: spaceURL)
             let reopenedSpace = try Presentation(url: spaceURL)
             let savedLists = reopenedSpace.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } }
-            guard savedLists.count == existingLists.count + 2, savedLists.allSatisfy({ $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.before == 0 && $0.after == 0 } }) else { throw AppError.message("List spacing did not survive saving") }
+            guard savedLists.count == existingLists.count + 2, savedLists.allSatisfy({ $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.after == 0 && $0.before > 0 } }) else { throw AppError.message("List spacing did not survive saving") }
             // Khanh's measured value: 22 pt text -> 42.59 pt line height.
-            guard abs(Presentation.listLineFactor * 22 - 42.59) < 0.01 else { throw AppError.message("Standard factor is not the measured 4259 / 2200") }
+            guard abs(Presentation.listPitchFactor * 22 - 42.59) < 0.01, abs((Presentation.listLineFactor + Presentation.listGapFactor) * 22 - 42.59) < 0.01 else { throw AppError.message("Standard factor is not the measured 4259 / 2200") }
             // The app speaks English only: no Vietnamese in the shortcut list or in any UI string a new object brings along.
             guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
             // The ⌘/ list is complete and short.
