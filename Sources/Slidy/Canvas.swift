@@ -69,6 +69,12 @@ final class CanvasView: NSView {
     private var panOffset = CGPoint.zero
     private var surfaceScale: CGFloat { max(0.01, surface.frame.width / max(1, surface.bounds.width)) }
     private var editedDrag = false
+    /// Crop mode (double-click a picture): which picture, the whole picture's rectangle, the current crop rectangle and the drag in progress.
+    private var cropItem: SlideItem?
+    private var cropOriginalFrame = CGRect.zero
+    private var cropOriginalInsets = NSEdgeInsets()
+    private var cropDrag: (edges: CropHandles.Edges, start: CGPoint, rect: CGRect)?
+    var isCropping: Bool { cropItem != nil }
     /// Selection outline, handles and marquee are drawn by one transparent view kept above every object.
     private let overlay = SelectionOverlay()
     private var caretTimer: Timer?
@@ -225,6 +231,61 @@ final class CanvasView: NSView {
         }
         raiseOverlay()
     }
+    // MARK: Crop mode
+    /// Double-click on a picture: shows the whole picture dimmed with a crop frame; drag its handles, Return applies, Esc cancels.
+    func startCrop(_ item: SlideItem) {
+        guard let presentation, let image = presentation.image(for: item), item.imageURL != nil, item.canMove, editor == nil, !presenting else { return }
+        let inset = item.imageCrop
+        let fullWidth = item.frame.width / max(0.05, 1 - inset.left - inset.right), fullHeight = item.frame.height / max(0.05, 1 - inset.top - inset.bottom)
+        cropItem = item; cropOriginalFrame = item.frame; cropOriginalInsets = inset
+        overlay.cropImage = image
+        overlay.cropFull = CGRect(x: item.frame.minX - inset.left * fullWidth, y: item.frame.minY - inset.top * fullHeight, width: fullWidth, height: fullHeight)
+        overlay.cropRect = item.frame
+        overlay.cropHandleSize = 10 / surfaceScale
+        updateSelection()
+    }
+    private func exitCrop() {
+        cropItem = nil; cropDrag = nil
+        overlay.cropImage = nil; overlay.needsDisplay = true
+        updateSelection()
+    }
+    func cancelCrop() { exitCrop() }
+    /// Applies the crop: the visible part keeps its size and place; the cut sides become <a:srcRect>.
+    func commitCrop() {
+        guard let item = cropItem else { return }
+        let full = overlay.cropFull, rect = overlay.cropRect
+        guard abs(rect.minX - cropOriginalFrame.minX) > 0.2 || abs(rect.minY - cropOriginalFrame.minY) > 0.2
+                || abs(rect.width - cropOriginalFrame.width) > 0.2 || abs(rect.height - cropOriginalFrame.height) > 0.2 else { exitCrop(); return }
+        let insets = NSEdgeInsets(top: (rect.minY - full.minY) / full.height, left: (rect.minX - full.minX) / full.width,
+                                  bottom: (full.maxY - rect.maxY) / full.height, right: (full.maxX - rect.maxX) / full.width)
+        onWillEdit?()
+        presentation?.setImageCrop(item, insets)
+        item.updateFrame(rect)
+        exitCrop()
+        rebuild(); onChanged?()
+    }
+    private func cropMouseDown(_ event: NSEvent) {
+        let point = surface.convert(event.locationInWindow, from: nil)
+        let reach = 14 / surfaceScale
+        let near = CropHandles.list(of: overlay.cropRect).filter { abs($0.point.x - point.x) <= reach && abs($0.point.y - point.y) <= reach }
+            .min { hypot($0.point.x - point.x, $0.point.y - point.y) < hypot($1.point.x - point.x, $1.point.y - point.y) }
+        cropDrag = near.map { ($0.edges, point, overlay.cropRect) }
+    }
+    private func cropMouseDragged(_ event: NSEvent) {
+        guard let drag = cropDrag else { return }
+        let point = surface.convert(event.locationInWindow, from: nil)
+        let dx = point.x - drag.start.x, dy = point.y - drag.start.y
+        let full = overlay.cropFull, start = drag.rect, minSize: CGFloat = 24
+        func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat { min(max(value, low), max(low, high)) }
+        var rect = start
+        if drag.edges.contains(.left) { let x = clamp(start.minX + dx, full.minX, start.maxX - minSize); rect.origin.x = x; rect.size.width = start.maxX - x }
+        if drag.edges.contains(.right) { rect.size.width = clamp(start.width + dx, minSize, full.maxX - start.minX) }
+        if drag.edges.contains(.top) { let y = clamp(start.minY + dy, full.minY, start.maxY - minSize); rect.origin.y = y; rect.size.height = start.maxY - y }
+        if drag.edges.contains(.bottom) { rect.size.height = clamp(start.height + dy, minSize, full.maxY - start.minY) }
+        overlay.cropRect = rect; overlay.needsDisplay = true
+    }
+    /// Test hook: the crop frame can be set directly.
+    var cropFrame: CGRect { get { overlay.cropRect } set { overlay.cropRect = newValue; overlay.needsDisplay = true } }
     /// Keeps the selection overlay above every object, badge and editor, whatever their stacking order.
     private func raiseOverlay() {
         overlay.frame = surface.bounds
@@ -233,7 +294,7 @@ final class CanvasView: NSView {
     }
     func updateSelection() {
         let scale = surfaceScale
-        if !selection.isEmpty, !presenting, editor == nil {
+        if !selection.isEmpty, !presenting, editor == nil, cropItem == nil {
             var outlines: [CGRect] = [], tableIndex: [String: Int] = [:]
             for item in selection {   // a selected table is one outline, not one per cell
                 if let id = item.tableID {
@@ -252,6 +313,7 @@ final class CanvasView: NSView {
     }
     func backgroundClick(_ event: NSEvent) {
         if presenting { advance(); return }
+        if cropItem != nil { cropMouseDown(event); return }
         if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
         window?.makeFirstResponder(self)
@@ -277,6 +339,7 @@ final class CanvasView: NSView {
     }
     func objectMouseDown(_ view: ObjectView, event: NSEvent) {
         if presenting { advance(); return }
+        if cropItem != nil { cropMouseDown(event); return }
         if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
         guard !view.item.inherited else { backgroundClick(event); return }
@@ -298,6 +361,9 @@ final class CanvasView: NSView {
             if let current = selected, let position = order.firstIndex(where: { $0 === current }) { target = order[(position + 1) % order.count] }
             else if order.count > 1 { target = order[1] }
         }
+        if event.clickCount == 2, target.imageURL != nil, target.canMove, !event.modifierFlags.contains(.option) {
+            select([target]); startCrop(target); return   // double-click on a picture crops it
+        }
         // A plain click on one of several selected objects keeps the selection so they can be dragged together;
         // releasing without a drag then narrows the selection to the clicked object.
         let keepsMultiSelection = selection.count > 1 && selection.contains { $0 === target } && !event.modifierFlags.contains(.option)
@@ -317,6 +383,7 @@ final class CanvasView: NSView {
     }
     func objectMouseDragged(_ view: ObjectView, event: NSEvent) { continueDrag(event) }
     func continueDrag(_ event: NSEvent) {
+        if cropItem != nil { cropMouseDragged(event); return }
         if marqueeStart != nil { updateMarquee(event); return }
         guard let start = dragOrigin, let item = dragItem, let host = objectViews.first(where: { $0.item === item }), editor == nil, !presenting else { return }
         let point = surface.convert(event.locationInWindow, from: nil)
@@ -438,6 +505,7 @@ final class CanvasView: NSView {
     }
     func objectMouseUp(_ view: ObjectView, event: NSEvent) { finishDrag() }
     func finishDrag() {
+        if cropItem != nil { cropDrag = nil; return }
         overlay.guides = []; overlay.needsDisplay = true
         endMarquee()
         if !editedDrag, let clicked = pendingCollapse { select(members(of: clicked)) }
@@ -643,6 +711,14 @@ final class CanvasView: NSView {
         else { onNavigate?(-1) }
     }
     override func keyDown(with event: NSEvent) {
+        if cropItem != nil {   // crop mode: Return applies, Esc cancels, everything else waits
+            switch event.keyCode {
+            case 36, 76: commitCrop()
+            case 53: cancelCrop()
+            default: NSSound.beep()
+            }
+            return
+        }
         if presenting {
             // ⌘↓ / ⌘↑ jump to the next / previous slide, shown complete.
             if [125, 126].contains(event.keyCode), event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {

@@ -296,6 +296,17 @@ final class Presentation {
         }
         return items
     }
+    /// Writes a picture's crop as the standard <a:srcRect> (fractions of the whole picture cut from each side).
+    func setImageCrop(_ item: SlideItem, _ crop: NSEdgeInsets) {
+        guard let blipFill = item.node.child("blipFill") else { return }
+        blipFill.child("srcRect")?.detach()
+        func value(_ fraction: CGFloat) -> String { String(Int((max(0, fraction) * 100000).rounded())) }
+        if [crop.left, crop.top, crop.right, crop.bottom].contains(where: { $0 > 0.0005 }) {
+            let rect = fragment("<a:srcRect l=\"\(value(crop.left))\" t=\"\(value(crop.top))\" r=\"\(value(crop.right))\" b=\"\(value(crop.bottom))\"/>")
+            if let blip = blipFill.child("blip") { blipFill.insertChild(rect, at: blip.index + 1) } else { blipFill.addChild(rect) }
+        }
+        item.imageCrop = crop
+    }
     func image(for item: SlideItem) -> NSImage? {
         guard let url = item.imageURL else { return nil }
         let key = url.path as NSString

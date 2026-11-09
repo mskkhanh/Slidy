@@ -20,6 +20,7 @@ enum Shortcuts {
             ("Click · ⇧-click", "Select · add or remove from the selection"),
             ("⌥-click", "Select the object underneath (repeat to go deeper)"),
             ("Drag · handle", "Move · resize, with snapping guides (hold ⌘ for none)"),
+            ("Double-click picture", "Crop: drag the handles, Return applies, Esc cancels"),
             ("← ↑ ↓ →", "Nudge 1 pt (⇧ for 10 pt)"),
             ("T · H", "Add a text box · a heading"),
             ("F", "Toggle Fade (⌘A then F clears a slide)"),

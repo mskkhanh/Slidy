@@ -201,9 +201,28 @@ final class SelectionOverlay: NSView {
     var caret: CGRect?
     var caretColor: NSColor = .white
     var caretOn = true
+    /// Crop mode: the whole picture dimmed, the part that stays bright, and its eight handles.
+    var cropImage: NSImage?
+    var cropFull = CGRect.zero
+    var cropRect = CGRect.zero
+    var cropHandleSize: CGFloat = 10
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
     override func draw(_ dirtyRect: NSRect) {
+        if let image = cropImage {
+            image.draw(in: cropFull, from: .zero, operation: .sourceOver, fraction: 0.35, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+            NSGraphicsContext.saveGraphicsState()
+            NSBezierPath(rect: cropRect).addClip()
+            image.draw(in: cropFull, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])
+            NSGraphicsContext.restoreGraphicsState()
+            NSColor.white.setStroke()
+            let frame = NSBezierPath(rect: cropRect); frame.lineWidth = lineWidth * 1.5; frame.stroke()
+            for point in CropHandles.points(of: cropRect) {
+                let square = CGRect(x: point.x - cropHandleSize / 2, y: point.y - cropHandleSize / 2, width: cropHandleSize, height: cropHandleSize)
+                NSColor(white: 0.96, alpha: 1).setFill(); NSBezierPath(rect: square).fill()
+                NSColor(white: 0.35, alpha: 1).setStroke(); let edge = NSBezierPath(rect: square); edge.lineWidth = lineWidth; edge.stroke()
+            }
+        }
         if let caret, caretOn { caretColor.setFill(); NSBezierPath(rect: caret).fill() }
         let accent = NSColor.controlAccentColor
         // Thin, soft gray outline so it never fights with the object's own text; handles are small visible squares
@@ -224,4 +243,16 @@ final class SelectionOverlay: NSView {
             let path = NSBezierPath(rect: marquee); path.lineWidth = lineWidth; path.stroke()
         }
     }
+}
+
+/// The eight crop handles of a crop rectangle: corners and edge midpoints, with the edges each one moves.
+enum CropHandles {
+    struct Edges: OptionSet { let rawValue: Int; static let left = Edges(rawValue: 1), right = Edges(rawValue: 2), top = Edges(rawValue: 4), bottom = Edges(rawValue: 8) }
+    static func list(of r: CGRect) -> [(point: CGPoint, edges: Edges)] {
+        [(CGPoint(x: r.minX, y: r.minY), [.left, .top]), (CGPoint(x: r.maxX, y: r.minY), [.right, .top]),
+         (CGPoint(x: r.minX, y: r.maxY), [.left, .bottom]), (CGPoint(x: r.maxX, y: r.maxY), [.right, .bottom]),
+         (CGPoint(x: r.midX, y: r.minY), .top), (CGPoint(x: r.midX, y: r.maxY), .bottom),
+         (CGPoint(x: r.minX, y: r.midY), .left), (CGPoint(x: r.maxX, y: r.midY), .right)]
+    }
+    static func points(of r: CGRect) -> [CGPoint] { list(of: r).map(\.point) }
 }

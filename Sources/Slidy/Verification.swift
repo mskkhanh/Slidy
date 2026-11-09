@@ -216,6 +216,53 @@ enum Verification {
             }
             return
         }
+        if ProcessInfo.processInfo.environment["CROP"] != nil {   // double-click a picture, drag a handle, Return applies, Esc cancels, ⌘Z undoes
+            let slide = presentation.slides[slideIndex]
+            let png = FileManager.default.temporaryDirectory.appendingPathComponent("crop-test-\(UUID().uuidString).png")
+            let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 300, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            try? bitmap.representation(using: .png, properties: [:])?.write(to: png)
+            defer { try? FileManager.default.removeItem(at: png) }
+            guard let picture = try? presentation.addImage(to: slide, url: png) else { print("  could not add a picture"); return }
+            delegate.canvas.display(slide, in: presentation); delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            let scale = delegate.canvas.surface.frame.width / max(1, delegate.canvas.surface.bounds.width)
+            let n = delegate.window.windowNumber
+            func mouse(_ type: NSEvent.EventType, _ slidePoint: CGPoint, clicks: Int = 1) -> NSEvent { NSEvent.mouseEvent(with: type, location: delegate.canvas.surface.convert(slidePoint, to: nil), modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 11, clickCount: clicks, pressure: 1)! }
+            func hitView(_ slidePoint: CGPoint) -> NSView? { delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(delegate.canvas.surface.convert(slidePoint, to: nil), from: nil)) }
+            func key(_ code: UInt16) { delegate.canvas.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!); RunLoop.current.run(until: Date().addingTimeInterval(0.3)) }
+            let center = CGPoint(x: picture.frame.midX, y: picture.frame.midY)
+            let before = picture.frame
+            // 1. Double-click enters crop mode.
+            hitView(center)?.mouseDown(with: mouse(.leftMouseDown, center, clicks: 2)); hitView(center)?.mouseUp(with: mouse(.leftMouseUp, center, clicks: 2))
+            print("  double-click: crop mode \(delegate.canvas.isCropping)")
+            // 2. Drag the right-middle handle 60 points to the left, the top-middle handle 30 points down.
+            let right = CGPoint(x: before.maxX, y: before.midY)
+            let down = mouse(.leftMouseDown, right); let drag = mouse(.leftMouseDragged, CGPoint(x: right.x - 60, y: right.y))
+            delegate.canvas.mouseDown(with: down); delegate.canvas.mouseDragged(with: drag); delegate.canvas.mouseUp(with: mouse(.leftMouseUp, CGPoint(x: right.x - 60, y: right.y)))
+            let top = CGPoint(x: delegate.canvas.cropFrame.midX, y: delegate.canvas.cropFrame.minY)
+            delegate.canvas.mouseDown(with: mouse(.leftMouseDown, top)); delegate.canvas.mouseDragged(with: mouse(.leftMouseDragged, CGPoint(x: top.x, y: top.y + 30))); delegate.canvas.mouseUp(with: mouse(.leftMouseUp, CGPoint(x: top.x, y: top.y + 30)))
+            let frame = delegate.canvas.cropFrame
+            print("  crop frame: width \(Int(before.width)) -> \(Int(frame.width)), height \(Int(before.height)) -> \(Int(frame.height)), top edge moved \(Int(frame.minY - before.minY))")
+            // 3. Escape cancels and leaves the picture alone.
+            key(53)
+            print("  Esc: cropping \(delegate.canvas.isCropping), picture frame unchanged \(picture.frame == before), crop \(picture.imageCrop.right)")
+            // 4. Do it again and apply with Return.
+            hitView(center)?.mouseDown(with: mouse(.leftMouseDown, center, clicks: 2)); hitView(center)?.mouseUp(with: mouse(.leftMouseUp, center, clicks: 2))
+            delegate.canvas.cropFrame = CGRect(x: before.minX + 20, y: before.minY + 10, width: before.width - 80, height: before.height - 40)
+            key(36)
+            let crop = picture.imageCrop
+            print("  Return: cropping \(delegate.canvas.isCropping), frame \(picture.frame.integral), crop l \(String(format: "%.3f", crop.left)) t \(String(format: "%.3f", crop.top)) r \(String(format: "%.3f", crop.right)) b \(String(format: "%.3f", crop.bottom))")
+            let xml = slide.document.xmlString
+            print("  XML has srcRect: \(xml.contains("<a:srcRect")), rounded corners kept: \(picture.geometry == "roundRect")")
+            // 5. Saved and read back; undo restores the full picture.
+            try? presentation.saveInPlace()
+            let back = try? Presentation(url: URL(fileURLWithPath: arguments[0]))
+            let saved = back?.slides[slideIndex].items.first(where: { $0.imageURL != nil && abs($0.frame.minX - picture.frame.minX) < 0.6 })
+            print("  saved: crop read back l \(String(format: "%.3f", saved?.imageCrop.left ?? -1)) r \(String(format: "%.3f", saved?.imageCrop.right ?? -1)), frame \(String(describing: saved?.frame.integral))")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let undone = presentation.slides[slideIndex].items.first(where: { $0.imageURL != nil })
+            print("  undo: frame \(String(describing: undone?.frame.integral)), crop r \(undone?.imageCrop.right ?? -1)")
+            return
+        }
         if ProcessInfo.processInfo.environment["MODIFIED"] != nil {   // opening a deck must not mark it as changed
             RunLoop.current.run(until: Date().addingTimeInterval(2.0))
             print("  after opening: modified = \(delegate.modified), undo available = \(delegate.undo.canUndo)")
@@ -522,14 +569,13 @@ enum Verification {
             let window = NSWindow(contentRect: canvas.frame, styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = canvas
             canvas.display(slide, in: document); canvas.layoutSubtreeIfNeeded()
+            if ProcessInfo.processInfo.environment["CROPLOOK"] != nil {
+                canvas.selected = item; canvas.startCrop(item)
+                canvas.cropFrame = CGRect(x: item.frame.minX + 40, y: item.frame.minY + 30, width: item.frame.width - 130, height: item.frame.height - 90)
+            }
             canvas.displayIfNeeded()
             guard let bitmap = canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds) else { return }
             canvas.cacheDisplay(in: canvas.bounds, to: bitmap)
-            // Layer shadows are not part of cacheDisplay: composite the layer tree as well.
-            let context = NSGraphicsContext(bitmapImageRep: bitmap)!
-            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
-            canvas.layer?.render(in: context.cgContext)
-            NSGraphicsContext.restoreGraphicsState()
             try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[1]))
             print("wrote \(arguments[1]); picture at \(item.frame.integral), corner ratio \(item.cornerRatio), shadow \(String(describing: item.shadow))")
         } catch { fputs("\(error)\n", stderr) }

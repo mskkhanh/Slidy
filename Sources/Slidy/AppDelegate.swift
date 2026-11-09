@@ -55,6 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             self.toggleRecents(); return true
         }
         editorWindow.onShortcut = { [weak self] key in
+            if self?.canvas.isCropping == true { return }   // crop mode owns the keyboard
             switch key {
             case "f": self?.toggleSelectedFade()
             case "t": self?.addText()
