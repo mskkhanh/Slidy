@@ -310,18 +310,18 @@ enum Verification {
             if step == arguments.count - 3, let resizeID = ProcessInfo.processInfo.environment["RESIZE"], let sized = slide.items.first(where: { $0.id == resizeID }) {   // drag the bottom-right handle near another edge
                 let scale = delegate.canvas.surface.frame.width / max(1, delegate.canvas.surface.bounds.width)
                 delegate.canvas.selected = sized
-                let corner = delegate.canvas.surface.convert(CGPoint(x: sized.frame.maxX - 1, y: sized.frame.maxY - 1), to: nil)
+                let reach = (ProcessInfo.processInfo.environment["REACH"].flatMap { Double($0) }.map { CGFloat($0) } ?? -1) / scale   // negative: inside the corner, positive: outside it
+                let corner = delegate.canvas.surface.convert(CGPoint(x: sized.frame.maxX + reach, y: sized.frame.maxY + reach), to: nil)
                 let target = ProcessInfo.processInfo.environment["RESIZE_TO"].flatMap { Double($0) }.map { CGFloat($0) } ?? (sized.frame.maxY + 60)
                 let to = CGPoint(x: corner.x, y: corner.y - (target - sized.frame.maxY) * scale)
                 let n = delegate.window.windowNumber
                 func event(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent { NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 78, clickCount: 1, pressure: 1)! }
                 if let hit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(corner, from: nil)) {
-                    var view: NSView? = hit; while let current = view, !(current is ObjectView) { view = current.superview }
                     let before = sized.frame
-                    print("  corner press lands on object \((view as? ObjectView)?.item.id ?? "none")")
-                    (view as? ObjectView)?.mouseDown(with: event(.leftMouseDown, corner)); (view as? ObjectView)?.mouseDragged(with: event(.leftMouseDragged, to))
+                    print("  press lands on \(type(of: hit))")
+                    hit.mouseDown(with: event(.leftMouseDown, corner)); hit.mouseDragged(with: event(.leftMouseDragged, to))
                     print("  resize: \(resizeID) bottom edge \(String(format: "%.1f", before.maxY)) -> \(String(format: "%.1f", sized.frame.maxY)) (asked for \(String(format: "%.1f", target)), guides \(delegate.canvas.guideCount))")
-                    (view as? ObjectView)?.mouseUp(with: event(.leftMouseUp, to))
+                    hit.mouseUp(with: event(.leftMouseUp, to))
                 }
             }
             print("\(step == 0 ? "click" : "shift-click") \(id): selection now \(delegate.canvas.selection.map(\.id)) (slide \(delegate.index + 1))")

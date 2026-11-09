@@ -53,8 +53,8 @@ final class SlideSurface: NSView {
         shade.setFill(); bounds.fill()
     }
     override func mouseDown(with event: NSEvent) { canvas?.backgroundClick(event) }
-    override func mouseDragged(with event: NSEvent) { canvas?.updateMarquee(event) }
-    override func mouseUp(with event: NSEvent) { canvas?.endMarquee() }
+    override func mouseDragged(with event: NSEvent) { canvas?.continueDrag(event) }
+    override func mouseUp(with event: NSEvent) { canvas?.finishDrag() }
 }
 final class InlineTextView: NSTextView {
     var finish: ((Bool) -> Void)?
@@ -190,10 +190,13 @@ final class SelectionOverlay: NSView {
     override func draw(_ dirtyRect: NSRect) {
         if let caret, caretOn { caretColor.setFill(); NSBezierPath(rect: caret).fill() }
         let accent = NSColor.controlAccentColor
-        accent.setStroke()
+        // Thin, soft gray outline so it never fights with the object's own text; handles are small visible squares
+        // (the grab area around them is much larger).
+        NSColor(white: 0.62, alpha: 0.55).setStroke()
         for rect in rects { let path = NSBezierPath(rect: rect); path.lineWidth = lineWidth; path.stroke() }
         for handle in handles {
-            NSColor.white.setFill(); NSBezierPath(rect: handle).fill()
+            NSColor(white: 0.96, alpha: 0.95).setFill(); NSBezierPath(rect: handle).fill()
+            NSColor(white: 0.45, alpha: 1).setStroke()
             let path = NSBezierPath(rect: handle); path.lineWidth = lineWidth; path.stroke()
         }
         if !guides.isEmpty {

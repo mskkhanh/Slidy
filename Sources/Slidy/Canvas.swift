@@ -172,11 +172,24 @@ final class CanvasView: NSView {
             lowerRight
         ]
     }
+    /// The handle under `point`, if any. The grab area is much larger than the handle you see (14 screen points around it)
+    /// and reaches outside the object, so a handle is easy to catch.
     private func resizeHandle(at point: CGPoint, for item: SlideItem) -> CGPoint? {
-        let radius: CGFloat = (item.imageURL == nil ? 6 : 10) / surfaceScale
+        let radius: CGFloat = 14 / surfaceScale
         return resizeCorners(for: item)
             .filter { abs(point.x - $0.x) <= radius && abs(point.y - $0.y) <= radius }
             .min { hypot(point.x - $0.x, point.y - $0.y) < hypot(point.x - $1.x, point.y - $1.y) }
+    }
+    /// A plain click on the handle of the single selected object starts a resize, whichever view received the click.
+    private func beginResizeIfOnHandle(_ event: NSEvent) -> Bool {
+        guard event.type == .leftMouseDown, event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option]).isEmpty,
+              selection.count == 1, let item = selected, item.canMove, editor == nil, !presenting else { return false }
+        let point = surface.convert(event.locationInWindow, from: nil)
+        guard let corner = resizeHandle(at: point, for: item) else { return false }
+        window?.makeFirstResponder(self)
+        dragOrigin = point; dragItem = item; originalFrame = item.frame; editedDrag = false
+        dragFrames = [:]; dragTables = []; pendingCollapse = nil; resizeCorner = corner
+        return true
     }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
@@ -228,15 +241,16 @@ final class CanvasView: NSView {
             overlay.rects = outlines
             overlay.handles = []
             if let selected, selected.canMove {
-                let radius: CGFloat = (selected.imageURL == nil ? 4 : 6) / scale
+                let radius: CGFloat = (selected.imageURL == nil ? 5.5 : 7) / scale
                 overlay.handles = resizeCorners(for: selected).map { CGRect(x: $0.x - radius, y: $0.y - radius, width: 2 * radius, height: 2 * radius) }
             }
-            overlay.lineWidth = (selection.count > 1 ? 2 : 1.5) / scale
+            overlay.lineWidth = 1 / scale
         } else { overlay.rects = []; overlay.handles = [] }
         raiseOverlay()
     }
     func backgroundClick(_ event: NSEvent) {
         if presenting { advance(); return }
+        if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
         window?.makeFirstResponder(self)
         guard event.type == .leftMouseDown else { return }
@@ -261,6 +275,7 @@ final class CanvasView: NSView {
     }
     func objectMouseDown(_ view: ObjectView, event: NSEvent) {
         if presenting { advance(); return }
+        if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
         guard !view.item.inherited else { backgroundClick(event); return }
         window?.makeFirstResponder(self)
@@ -298,7 +313,8 @@ final class CanvasView: NSView {
         for cell in moving { if let table = cell.tableNode, seenTables.insert(ObjectIdentifier(table)).inserted, let off = table.child("xfrm")?.child("off") { dragTables.append((table, off.number("x"), off.number("y"))) } }
         resizeCorner = movesTogether ? nil : resizeHandle(at: point, for: target)
     }
-    func objectMouseDragged(_ view: ObjectView, event: NSEvent) {
+    func objectMouseDragged(_ view: ObjectView, event: NSEvent) { continueDrag(event) }
+    func continueDrag(_ event: NSEvent) {
         if marqueeStart != nil { updateMarquee(event); return }
         guard let start = dragOrigin, let item = dragItem, let host = objectViews.first(where: { $0.item === item }), editor == nil, !presenting else { return }
         let point = surface.convert(event.locationInWindow, from: nil)
@@ -417,7 +433,8 @@ final class CanvasView: NSView {
         overlay.guides = guideLines(for: frame, targets: targets)
         return frame
     }
-    func objectMouseUp(_ view: ObjectView, event: NSEvent) {
+    func objectMouseUp(_ view: ObjectView, event: NSEvent) { finishDrag() }
+    func finishDrag() {
         overlay.guides = []; overlay.needsDisplay = true
         endMarquee()
         if !editedDrag, let clicked = pendingCollapse { select(members(of: clicked)) }
