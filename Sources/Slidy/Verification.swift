@@ -216,6 +216,19 @@ enum Verification {
             }
             return
         }
+        if ProcessInfo.processInfo.environment["LINESPACE"] != nil {   // the Edit menu command on a selection, with undo
+            let slide = presentation.slides[slideIndex]
+            guard let item = slide.items.first(where: { $0.canMove && $0.textBody != nil && !$0.text.isEmpty }) else { return }
+            delegate.canvas.select([item]); delegate.window.makeFirstResponder(delegate.canvas)
+            let before = item.paragraphs.map(\.spacing)
+            delegate.loosenLineSpacing(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let after = presentation.slides[slideIndex].items.first(where: { $0.id == item.id })?.paragraphs.map(\.spacing) ?? []
+            print("  loosen: line height \(before.map { Int($0) }) -> \(after.map { Int($0) })")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let undone = presentation.slides[slideIndex].items.first(where: { $0.id == item.id })?.paragraphs.map(\.spacing) ?? []
+            print("  after undo: \(undone.map { Int($0) }), restored: \(zip(before, undone).allSatisfy { abs($0 - $1) < 0.5 })")
+            return
+        }
         if ProcessInfo.processInfo.environment["SIDEBAR"] != nil {   // ⌘B slides the left column out and in smoothly
             delegate.window.layoutIfNeeded()
             let open = delegate.canvas.frame.minX
@@ -924,6 +937,19 @@ enum Verification {
                   savedPicture.geometry == "roundRect", savedPicture.cornerRatio > 0.01, savedPicture.cornerRatio < 0.06,
                   shadowDoc.slides[1].document.xmlString.contains("prst=\"roundRect\"") else { throw AppError.message("Picture corners are not slightly rounded") }
             guard shadowDoc.slides[0].items.filter({ $0.imageURL != nil }).allSatisfy({ $0.geometry != "roundRect" }) else { throw AppError.message("Existing pictures must keep their own corners") }
+            // Line spacing: one notch looser or tighter, stored as the standard lnSpc, saved and read back.
+            let lineDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
+            let lineSlide = lineDoc.slides[2]
+            guard let spaced = lineSlide.items.first(where: { $0.canMove && $0.textBody != nil && !$0.text.isEmpty }) else { throw AppError.message("No text to test line spacing") }
+            let originalLines = spaced.paragraphs.map(\.spacing)
+            lineDoc.adjustLineSpacing(spaced, step: 0.1)
+            let looser = spaced.paragraphs.map(\.spacing)
+            guard zip(originalLines, looser).allSatisfy({ $1 > $0 * 1.05 && $1 < $0 * 1.2 }) else { throw AppError.message("Line spacing did not loosen by about 10%: \(originalLines) -> \(looser)") }
+            let lineURL = output.appendingPathComponent("linespacing.pptx")
+            try lineDoc.save(to: lineURL)
+            guard let backItem = try Presentation(url: lineURL).slides[2].items.first(where: { $0.id == spaced.id }), zip(looser, backItem.paragraphs.map(\.spacing)).allSatisfy({ abs($0 - $1) < 0.5 }) else { throw AppError.message("Line spacing did not survive saving") }
+            lineDoc.adjustLineSpacing(spaced, step: -0.1)
+            guard zip(originalLines, spaced.paragraphs.map(\.spacing)).allSatisfy({ abs($0 - $1) < $0 * 0.1 }) else { throw AppError.message("Tightening did not roughly restore the spacing") }
             // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
             let deleteURL = output.appendingPathComponent("delete.pptx")
             try? FileManager.default.removeItem(at: deleteURL)

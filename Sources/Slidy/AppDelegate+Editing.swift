@@ -282,3 +282,27 @@ extension AppDelegate {
         canvas.rebuild(); didChange()
     }
 }
+
+extension AppDelegate {
+    /// Edit menu: loosen / tighten the line spacing of the selected text, or of all text in the deck when nothing is selected.
+    @objc func loosenLineSpacing() { adjustLineSpacing(step: 0.1) }
+    @objc func tightenLineSpacing() { adjustLineSpacing(step: -0.1) }
+    func adjustLineSpacing(step: Double) {
+        guard let presentation, !busy, canvas.editor == nil, showWindow == nil, window.attachedSheet == nil else { return }
+        let selected = canvas.selection.filter { $0.canMove && $0.textBody != nil && !$0.isTableCell }
+        let wholeDeck = selected.isEmpty
+        let targets = wholeDeck ? presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.textBody != nil } } : selected
+        guard !targets.isEmpty else { NSSound.beep(); return }
+        if wholeDeck {   // nothing selected: say what is about to change
+            let alert = NSAlert()
+            alert.messageText = step > 0 ? "Loosen line spacing of all text?" : "Tighten line spacing of all text?"
+            alert.informativeText = "Every text box in the deck changes by one notch (10%). Select objects first to change only those. ⌘Z undoes it."
+            alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
+        canvas.finishEditing(commit: true)
+        checkpointAll()
+        targets.forEach { presentation.adjustLineSpacing($0, step: step) }
+        refreshAllSlides()
+    }
+}

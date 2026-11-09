@@ -130,6 +130,26 @@ extension Presentation {
         configureText(item)
         fitFrame(item)
     }
+    /// Loosens (positive `step`) or tightens (negative) the line spacing of a text object by one notch (10%).
+    /// Written as the standard <a:lnSpc>; spacing given in points is scaled, spacing given in percent moves by 10 points of percent.
+    func adjustLineSpacing(_ item: SlideItem, step: Double) {
+        guard let body = item.textBody else { return }
+        for paragraph in body.all("p") {
+            let properties: XMLElement
+            if let existing = paragraph.child("pPr") { properties = existing }
+            else { properties = XMLElement(name: "a:pPr"); paragraph.insertChild(properties, at: 0) }
+            if let points = properties.child("lnSpc")?.child("spcPts"), let value = Double(points.attr("val") ?? "") {
+                points.set("val", String(Int(min(20000, max(800, value * (1 + step))))))
+            } else if let percent = properties.child("lnSpc")?.child("spcPct"), let value = Double(percent.attr("val") ?? "") {
+                percent.set("val", String(Int(min(200000, max(80000, value + step * 100000)))))
+            } else {
+                properties.child("lnSpc")?.detach()
+                properties.insertChild(fragment("<a:lnSpc><a:spcPct val=\"\(Int(100000 + step * 100000))\"/></a:lnSpc>"), at: 0)
+            }
+        }
+        configureText(item)
+        fitFrame(item)
+    }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)
     }

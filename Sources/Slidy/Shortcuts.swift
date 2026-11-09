@@ -31,7 +31,7 @@ enum Shortcuts {
             ("⇧Enter", "New line inside a paragraph"),
             ("- + Space", "Start a bullet list"),
             ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)"),
-            ("Edit menu", "Spread / tighten the items of a list")
+            ("Edit menu", "Spread list items · loosen / tighten line spacing")
         ]),
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide while editing"),
