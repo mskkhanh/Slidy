@@ -6,7 +6,8 @@ import ArchiveBridge
 // The open .pptx: extracts it to a temp folder, parses slides, resolves themes, images and fonts, and saves it back.
 final class Presentation {
     let folder: URL
-    let source: URL
+    /// The file on disk. It changes when the file is renamed from the recent files list.
+    var source: URL
     /// Modification time of the file when it was opened or last saved by Slidy, to notice outside changes.
     var sourceStamp: Date?
     /// Slide order changed since presentation.xml was last written into the work folder.

@@ -176,3 +176,41 @@ extension AppDelegate {
         didChange()
     }
 }
+
+extension AppDelegate {
+    /// Renames a file on disk and everywhere the app knows it: the recent list, the open presentation (so autosave keeps
+    /// writing to the right file) and the window title. The extension never changes. Returns the new location.
+    @discardableResult
+    func renameFile(at url: URL, to typedName: String) throws -> URL {
+        var name = typedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.lowercased().hasSuffix("." + url.pathExtension.lowercased()) { name = String(name.dropLast(url.pathExtension.count + 1)).trimmingCharacters(in: .whitespaces) }
+        guard !name.isEmpty else { throw AppError.message("Enter a file name.") }
+        guard !name.contains("/"), !name.contains(":"), !name.hasPrefix("."), name.count <= 200 else {
+            throw AppError.message("A file name can’t contain / or : or start with a dot.")
+        }
+        let newURL = url.deletingLastPathComponent().appendingPathComponent(name).appendingPathExtension(url.pathExtension)
+        if newURL.path == url.path { return url }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw AppError.message("Can’t rename: the file wasn’t found.") }
+        let caseOnly = newURL.path.lowercased() == url.path.lowercased()
+        guard caseOnly || !FileManager.default.fileExists(atPath: newURL.path) else { throw AppError.message("A file with that name already exists.") }
+        let isOpen = presentation.map { RecentPresentation.key($0.source.standardizedFileURL.path) == RecentPresentation.key(url.standardizedFileURL.path) } ?? false
+        if isOpen { guard flushSave(silent: true) else { throw AppError.message("Can’t rename while the file can’t be saved.") } }   // nothing pending for the old name
+        if caseOnly {   // case-insensitive volumes: go through a temporary name
+            let temporary = url.deletingLastPathComponent().appendingPathComponent(".rename-\(UUID().uuidString)")
+            try FileManager.default.moveItem(at: url, to: temporary)
+            try FileManager.default.moveItem(at: temporary, to: newURL)
+        } else {
+            try FileManager.default.moveItem(at: url, to: newURL)
+        }
+        // A leftover backup next to the file travels with it.
+        let oldBackup = url.appendingPathExtension("bak"), newBackup = newURL.appendingPathExtension("bak")
+        if FileManager.default.fileExists(atPath: oldBackup.path), !FileManager.default.fileExists(atPath: newBackup.path) { try? FileManager.default.moveItem(at: oldBackup, to: newBackup) }
+        let oldKey = RecentPresentation.key(url.standardizedFileURL.path)
+        var seen = Set<String>()
+        recentPresentations = recentPresentations
+            .map { $0.key == oldKey ? RecentPresentation(path: newURL.standardizedFileURL.path, slide: $0.slide) : $0 }
+            .filter { seen.insert($0.key).inserted }   // never the same file twice
+        if isOpen { presentation?.source = newURL; updateStatus() }
+        return newURL
+    }
+}

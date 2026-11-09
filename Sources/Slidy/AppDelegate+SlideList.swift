@@ -9,7 +9,12 @@ struct RecentPresentation: Codable {
     var url: URL { URL(fileURLWithPath: path) }
     /// File names with accents can arrive composed or decomposed; compare them in one form so a file never appears twice.
     var key: String { Self.key(path) }
-    static func key(_ path: String) -> String { path.precomposedStringWithCanonicalMapping }
+    /// One spelling per file: composed accents, and no "/private" in front of /tmp, /var and /etc (macOS reports both).
+    static func key(_ path: String) -> String {
+        let composed = path.precomposedStringWithCanonicalMapping
+        for prefix in ["/private/tmp/", "/private/var/", "/private/etc/"] where composed.hasPrefix(prefix) { return String(composed.dropFirst(8)) }
+        return composed
+    }
     var exists: Bool { FileManager.default.fileExists(atPath: path) }
 }
 
@@ -142,18 +147,70 @@ extension AppDelegate {
     }
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard table.selectedRow >= 0, !busy, !suppressSelectionOpen else { return }
-        guard let presentation, !showingRecents else {
-            if recentSidebarEntries.indices.contains(table.selectedRow) {
-                let url = recentSidebarEntries[table.selectedRow].url
-                if let open = presentation?.source, RecentPresentation.key(url.standardizedFileURL.path) == RecentPresentation.key(open.standardizedFileURL.path) { toggleRecents() }
-                else { openURL(url) }
-            }
-            return
-        }
+        guard let presentation, !showingRecents else { return }   // recent files open from a click (see recentClicked)
         canvas.finishEditing(commit: true); index = table.selectedRow
         canvas.display(presentation.slides[index], in: presentation)
         updateStatus()
         enforceStandardListSpacing([presentation.slides[index]])
+    }
+    // MARK: Recent files: click opens, double-click renames
+    /// Opens the recent file in `row` (or closes the list when it is the file already open).
+    func openRecent(row: Int) {
+        guard recentsMode, recentSidebarEntries.indices.contains(row), !busy else { return }
+        let url = recentSidebarEntries[row].url
+        if let open = presentation?.source, RecentPresentation.key(url.standardizedFileURL.path) == RecentPresentation.key(open.standardizedFileURL.path) { toggleRecents() }
+        else { openURL(url) }
+    }
+    /// A single click opens the file, but only after the double-click interval, so a double-click can rename instead.
+    @objc func recentClicked() {
+        guard recentsMode, renameField == nil else { return }
+        let row = table.clickedRow
+        guard row >= 0 else { return }
+        pendingRecentOpen?.cancel()
+        let work = DispatchWorkItem { [weak self] in self?.openRecent(row: row) }
+        pendingRecentOpen = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: work)
+    }
+    @objc func recentDoubleClicked() {
+        pendingRecentOpen?.cancel(); pendingRecentOpen = nil
+        guard recentsMode else { return }
+        beginRename(row: table.clickedRow)
+    }
+    /// The name is edited in place; only the part before ".pptx" can change.
+    func beginRename(row: Int) {
+        guard recentSidebarEntries.indices.contains(row), renameField == nil,
+              let cell = table.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
+              let field = cell.subviews.compactMap({ $0 as? NSTextField }).first else { return }
+        let url = recentSidebarEntries[row].url
+        guard FileManager.default.fileExists(atPath: url.path) else { NSSound.beep(); return }
+        renamingURL = url; renameField = field
+        field.stringValue = url.deletingPathExtension().lastPathComponent
+        field.isEditable = true; field.isSelectable = true
+        field.drawsBackground = true; field.backgroundColor = NSColor(white: 0.16, alpha: 1)
+        field.maximumNumberOfLines = 3
+        field.delegate = self
+        window.makeFirstResponder(field)
+        field.currentEditor()?.selectAll(nil)
+    }
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+        guard control === renameField else { return false }
+        if selector == #selector(NSResponder.insertNewline(_:)) { finishRename(commit: true); return true }
+        if selector == #selector(NSResponder.cancelOperation(_:)) { finishRename(commit: false); return true }
+        return false
+    }
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if notification.object as? NSTextField === renameField { finishRename(commit: true) }   // clicking elsewhere keeps the new name
+    }
+    func finishRename(commit: Bool) {
+        guard let field = renameField, let url = renamingURL else { return }
+        let text = field.stringValue
+        renameField = nil; renamingURL = nil
+        field.delegate = nil; field.isEditable = false; field.drawsBackground = false
+        if commit {
+            do { try renameFile(at: url, to: text) } catch { showError(error) }
+        }
+        updateRecentSidebar()
+        window.makeFirstResponder(table)
     }
     /// ⌘E: swaps the thumbnail column for the list of recent files, and back.
     @objc func toggleRecents() {

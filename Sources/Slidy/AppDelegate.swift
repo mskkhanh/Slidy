@@ -1,7 +1,7 @@
 import AppKit
 
 /// App entry: owns the window, the open presentation and its state. Behaviour lives in the AppDelegate+*.swift extensions.
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
     var window: NSWindow!
     let canvas = CanvasView()
     let table = NSTableView()
@@ -31,6 +31,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var index = 0
     /// True after an autosave failed (for example the file changed outside Slidy); automatic changes pause until a save works.
     var saveFailing = false
+    /// A click on a recent file opens it after the double-click interval, unless a double-click (rename) follows.
+    var pendingRecentOpen: DispatchWorkItem?
+    /// The text field currently renaming a file in the recent list.
+    weak var renameField: NSTextField?
+    var renamingURL: URL?
     var modified = false {
         didSet { if modified && !oldValue, ProcessInfo.processInfo.environment["SLIDY_TRACE_MODIFIED"] != nil { fputs("MODIFIED set by:\n" + Thread.callStackSymbols.prefix(14).joined(separator: "\n") + "\n", stderr) } }
     }
@@ -86,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let column = NSTableColumn(identifier: .init("slides")); column.width = 174; column.resizingMask = .autoresizingMask
         table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
         table.delegate = self; table.dataSource = self; table.registerForDraggedTypes([AppDelegate.slideRowType]); table.setDraggingSourceOperationMask(.move, forLocal: true); table.draggingDestinationFeedbackStyle = .sourceList; table.backgroundColor = .black
+        table.target = self; table.action = #selector(recentClicked); table.doubleAction = #selector(recentDoubleClicked)
         table.style = .plain
         scroll.drawsBackground = true; scroll.backgroundColor = .black
         scroll.documentView = table

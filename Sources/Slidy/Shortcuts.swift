@@ -24,7 +24,7 @@ enum Shortcuts {
             ("Delete", "Slide list focused: delete the selected slide"),
             ("⌘↑ / ⌘↓", "Slide list focused: move the selected slide up / down"),
             ("Drag a slide", "Reorder slides in the left column"),
-            ("⌘E", "Recent files in the left column (Esc or ⌘E to go back)")
+            ("⌘E", "Recent files: click opens, double-click renames (⌘E or Esc goes back)")
         ]),
         ("View", [
             ("⌘B", "Hide / show the left column"),

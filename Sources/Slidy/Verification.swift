@@ -268,6 +268,55 @@ enum Verification {
             print("  after opening: modified = \(delegate.modified), undo available = \(delegate.undo.canUndo)")
             return
         }
+        if ProcessInfo.processInfo.environment["RENAME"] != nil {   // renaming a file from the recent list, on a private copy
+            let directory = URL(fileURLWithPath: arguments[0]).deletingLastPathComponent()
+            let original = URL(fileURLWithPath: arguments[0])
+            let other = directory.appendingPathComponent("other deck.pptx"); try? FileManager.default.copyItem(at: original, to: other)
+            let stranger = directory.appendingPathComponent("not open.pptx"); try? FileManager.default.copyItem(at: original, to: stranger)
+            guard RecentPresentation.key("/private/tmp/a.pptx") == RecentPresentation.key("/tmp/a.pptx") else { print("  keys differ for /private/tmp"); return }
+            print("  recents before: \(delegate.recentPresentations.map(\.path))")
+            func attempt(_ name: String, on url: URL) -> String {
+                do { let result = try delegate.renameFile(at: url, to: name); return "ok -> \(result.lastPathComponent)" } catch { return "refused: \(error.localizedDescription)" }
+            }
+            print("  empty name: \(attempt("  ", on: original))")
+            print("  slash: \(attempt("a/b", on: original))")
+            print("  colon: \(attempt("x:y", on: original))")
+            print("  already exists: \(attempt("other deck", on: original))")
+            print("  after refusals the file is still: \(original.lastPathComponent) exists \(FileManager.default.fileExists(atPath: original.path))")
+            // The open file: rename, keep working.
+            let renamed = (try? delegate.renameFile(at: original, to: "Renamed deck.pptx")) ?? original   // a typed ".pptx" is not doubled
+            print("  open file renamed: \(renamed.lastPathComponent), old path gone \(!FileManager.default.fileExists(atPath: original.path)), new exists \(FileManager.default.fileExists(atPath: renamed.path))")
+            print("  presentation points at it: \(delegate.presentation?.source.lastPathComponent ?? "-"), window title: \(delegate.window.title)")
+            print("  recents after: \(delegate.recentPresentations.map(\.path))")
+            let before = (try? Data(contentsOf: renamed)) ?? Data()
+            let slide = presentation.slides[slideIndex]
+            if let item = slide.items.first(where: { $0.canMove }) { delegate.canvas.select([item]); delegate.toggleSelectedFade() }
+            _ = delegate.flushSave()
+            let after = (try? Data(contentsOf: renamed)) ?? Data()
+            print("  autosave writes to the new name: \(before != after), old name not recreated: \(!FileManager.default.fileExists(atPath: original.path))")
+            // Only the part before the extension changes; case-only changes work too.
+            print("  case only: \(attempt("RENAMED DECK", on: renamed))")
+            // A file that is not open.
+            delegate.recentPresentations = [RecentPresentation(path: stranger.path, slide: 3)] + delegate.recentPresentations
+            print("  other file: \(attempt("Another name", on: stranger)), recent entry kept its slide: \(delegate.recentPresentations.first { $0.path.hasSuffix("Another name.pptx") }?.slide ?? -1)")
+            // The in-place editor: double-click starts it, Return commits, the extension is never shown or editable.
+            let uiTarget = directory.appendingPathComponent("Another name.pptx")
+            delegate.recentPresentations = [RecentPresentation(path: uiTarget.path, slide: 0)]
+            delegate.toggleRecents(); RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.table.reloadData(); delegate.window.layoutIfNeeded()
+            delegate.beginRename(row: 0)
+            if let field = delegate.renameField {
+                print("  editor shows only the name: \(field.stringValue.debugDescription), editable \(field.isEditable)")
+                field.stringValue = "Typed in the sidebar.pptx"
+                delegate.finishRename(commit: true)
+                print("  after Return: on disk \(FileManager.default.fileExists(atPath: directory.appendingPathComponent("Typed in the sidebar.pptx").path)), no double extension \(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("Typed in the sidebar.pptx.pptx").path))")
+                try? FileManager.default.removeItem(at: directory.appendingPathComponent("Typed in the sidebar.pptx"))
+            } else { print("  the in-place editor did not start") }
+            try? FileManager.default.removeItem(at: other)
+            try? FileManager.default.removeItem(at: directory.appendingPathComponent("Another name.pptx"))
+            delegate.recentPresentations = []
+            return
+        }
         if ProcessInfo.processInfo.environment["AUTOLIST"] != nil {   // opening a deck applies the standard list spacing by itself
             RunLoop.current.run(until: Date().addingTimeInterval(2.5))   // autosave has run
             let lists = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } }
