@@ -59,6 +59,7 @@ final class CanvasView: NSView {
     override var acceptsFirstResponder: Bool { true }
     override init(frame: NSRect) {
         super.init(frame: frame); wantsLayer = true
+        clipsToBounds = true   // a zoomed slide must never spill over the sidebar or the toolbar
         surface.wantsLayer = true; surface.canvas = self
         addSubview(surface)
         surface.addSubview(overlay)
