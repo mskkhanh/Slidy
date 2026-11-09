@@ -13,6 +13,8 @@ final class Presentation {
     var orderDirty = false
     /// Slides created in this session (their files may be removed again by undo).
     var insertedSlidePaths = Set<String>()
+    /// Where files of deleted slides wait in case of undo.
+    var holdingFolders: [URL] = []
     var slides: [Slide] = []
     var size = CGSize(width: 960, height: 540)
     lazy var textLeftMargin: CGFloat = {
@@ -51,7 +53,10 @@ final class Presentation {
     }
     deinit { discardWorkFolder() }
     /// The extracted copy of the .pptx lives in the temp folder. Quitting does not run deinit, so it is removed explicitly.
-    func discardWorkFolder() { try? FileManager.default.removeItem(at: folder) }
+    func discardWorkFolder() {
+        try? FileManager.default.removeItem(at: folder)
+        holdingFolders.forEach { try? FileManager.default.removeItem(at: $0) }
+    }
     /// Removes work folders left by earlier runs that quit or crashed before cleaning up.
     static func removeStaleWorkFolders() {
         let temp = FileManager.default.temporaryDirectory

@@ -28,14 +28,14 @@ extension Presentation {
         }
         return (numbers.max() ?? 0) + 1
     }
-    private func editRelationships(_ change: (XMLElement) throws -> Void) throws {
+    func editRelationships(_ change: (XMLElement) throws -> Void) throws {
         let url = folder.appendingPathComponent("ppt/_rels/presentation.xml.rels")
         let document = try readXML(url)
         guard let root = document.rootElement() else { throw AppError.message("Thiếu liên kết trong file.") }
         try change(root)
         try document.xmlData.write(to: url, options: .atomic)
     }
-    private func editContentTypes(_ change: (String) -> String) throws {
+    func editContentTypes(_ change: (String) -> String) throws {
         let url = folder.appendingPathComponent("[Content_Types].xml")
         let text = try String(contentsOf: url, encoding: .utf8)
         try change(text).write(to: url, atomically: true, encoding: .utf8)
@@ -118,6 +118,113 @@ extension Presentation {
         try? FileManager.default.removeItem(at: folder.appendingPathComponent("ppt/slides/_rels/\(name).rels"))
         xmlCache[slide.path] = nil
         insertedSlidePaths.remove(slide.path)
+        orderDirty = true
+    }
+}
+
+/// Everything needed to put a deleted slide back exactly as it was.
+final class RemovedSlide {
+    let slide: Slide
+    let index: Int
+    let entry: XMLElement
+    let relationship: XMLElement?
+    let overrides: [String]
+    let moved: [(original: URL, backup: URL)]
+    init(slide: Slide, index: Int, entry: XMLElement, relationship: XMLElement?, overrides: [String], moved: [(original: URL, backup: URL)]) {
+        self.slide = slide; self.index = index; self.entry = entry; self.relationship = relationship; self.overrides = overrides; self.moved = moved
+    }
+}
+
+extension Presentation {
+    /// A relationship Target ("../slideLayouts/x.xml" or "/ppt/x.xml") as a path from the package root.
+    /// `base` is the folder the relationships describe, e.g. "ppt/slides".
+    static func resolveTarget(_ target: String, from base: String) -> String {
+        if target.hasPrefix("/") { return String(target.dropFirst()) }
+        var parts = base.split(separator: "/").map(String.init)
+        for piece in target.split(separator: "/") {
+            if piece == ".." { _ = parts.popLast() } else if piece != "." { parts.append(String(piece)) }
+        }
+        return parts.joined(separator: "/")
+    }
+    /// Every part target referenced by a .rels file of the package, as paths relative to the package root.
+    private func referencedTargets(excluding excluded: Set<String>) -> Set<String> {
+        var result = Set<String>()
+        let root = folder.resolvingSymlinksInPath()   // the temp folder sits behind a /var -> /private/var link
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return result }
+        for case let url as URL in walker where url.pathExtension == "rels" {
+            let relative = String(url.resolvingSymlinksInPath().path.dropFirst(root.path.count + 1))
+            guard !excluded.contains(relative), let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let base = ((relative as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent   // folder the rels describe
+            for chunk in text.components(separatedBy: "<Relationship ").dropFirst() {
+                guard !chunk.contains("TargetMode=\"External\""), let start = chunk.range(of: "Target=\"") else { continue }
+                let target = String(chunk[start.upperBound...].prefix { $0 != "\"" })
+                result.insert(Self.resolveTarget(target, from: base))
+            }
+        }
+        return result
+    }
+    /// Deletes a slide the way PowerPoint does: its list entry, relationship, content type, part and rels, its notes page,
+    /// and media nobody else uses. Files are set aside (not erased) so `restoreSlide` can bring it all back.
+    func removeSlide(at index: Int) throws -> RemovedSlide {
+        guard slides.indices.contains(index), slides.count > 1, let entry = slides[index].listEntry else { throw AppError.message("Không xóa được slide này.") }
+        let slide = slides[index]
+        let rels = relationships(slide.path)
+        let relsPath = ((slide.path as NSString).deletingLastPathComponent as NSString).appendingPathComponent("_rels/" + (slide.path as NSString).lastPathComponent + ".rels")
+        var doomed = [slide.path, relsPath]
+        var excluded: Set<String> = [relsPath]
+        for target in rels.values where target.contains("/notesSlides/") {
+            let notesRels = ((target as NSString).deletingLastPathComponent as NSString).appendingPathComponent("_rels/" + (target as NSString).lastPathComponent + ".rels")
+            doomed += [target, notesRels]; excluded.insert(notesRels)
+        }
+        let stillUsed = referencedTargets(excluding: excluded)
+        for target in rels.values where !target.contains("/notesSlides/") && !stillUsed.contains(target) { doomed.append(target) }   // media only this slide used
+        let holding = FileManager.default.temporaryDirectory.appendingPathComponent("\(Self.workFolderPrefix)removed-\(UUID().uuidString)", isDirectory: true)
+        var moved: [(URL, URL)] = []
+        for path in doomed {
+            let original = folder.appendingPathComponent(path)
+            guard FileManager.default.fileExists(atPath: original.path) else { continue }
+            let backup = holding.appendingPathComponent(path)
+            try FileManager.default.createDirectory(at: backup.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: original, to: backup)
+            moved.append((original, backup))
+        }
+        // Content-type overrides of the removed parts.
+        var removedOverrides: [String] = []
+        try editContentTypes { text in
+            var result = text
+            for path in doomed {
+                guard let start = result.range(of: "<Override PartName=\"/\(path)\"") , let end = result[start.lowerBound...].range(of: "/>") else { continue }
+                removedOverrides.append(String(result[start.lowerBound..<end.upperBound]))
+                result.removeSubrange(start.lowerBound..<end.upperBound)
+            }
+            return result
+        }
+        let relationshipID = entry.attr("r:id")
+        var savedRelationship: XMLElement?
+        try editRelationships { root in
+            for element in root.elements where element.attr("Id") == relationshipID { savedRelationship = element.copy() as? XMLElement; element.detach() }
+        }
+        entry.detach()
+        slides.remove(at: index)
+        xmlCache[slide.path] = nil
+        holdingFolders.append(holding)
+        orderDirty = true
+        return RemovedSlide(slide: slide, index: index, entry: entry, relationship: savedRelationship, overrides: removedOverrides, moved: moved)
+    }
+    /// Undo of `removeSlide`: files, content types, relationship, list entry and the slide itself (Fade included).
+    func restoreSlide(_ removed: RemovedSlide) throws {
+        for (original, backup) in removed.moved {
+            try FileManager.default.createDirectory(at: original.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.moveItem(at: backup, to: original)
+        }
+        try editContentTypes { text in text.replacingOccurrences(of: "</Types>", with: removed.overrides.joined() + "</Types>") }
+        if let relationship = removed.relationship?.copy() as? XMLElement { try editRelationships { $0.addChild(relationship) } }
+        guard let list = (try part("ppt/presentation.xml")).rootElement()?.child("sldIdLst") else { throw AppError.message("Thiếu danh sách slide trong file.") }
+        slides.insert(removed.slide, at: min(removed.index, slides.count))
+        removed.slide.listEntry = removed.entry
+        slides.forEach { $0.listEntry?.detach() }
+        slides.forEach { if let entry = $0.listEntry { list.addChild(entry) } }
+        xmlCache[removed.slide.path] = removed.slide.document
         orderDirty = true
     }
 }

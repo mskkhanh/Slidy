@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "t": self?.addText()
             case "h": self?.addHeading()
             case "present": self?.presentSlides()
+            case "deleteSlide": self?.deleteSlideInDeck(at: self?.index ?? 0)
             case "newSlide": self?.insertSlideInDeck(after: self?.index ?? 0)
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)

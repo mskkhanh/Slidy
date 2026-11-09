@@ -15,6 +15,10 @@ final class SlideEditorWindow: NSWindow {
         if event.type == .keyDown, attachedSheet == nil, let onShortcut {
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers.isEmpty, event.keyCode == 53, !(firstResponder is NSTextView), onEscape?() == true { return }
+            if modifiers.isEmpty, [51, 117].contains(event.keyCode), let slideList, firstResponder === slideList {
+                if !event.isARepeat { onShortcut("deleteSlide") }
+                return
+            }
             if modifiers.isEmpty, [36, 76].contains(event.keyCode), let slideList, firstResponder === slideList {
                 if !event.isARepeat { onShortcut("newSlide") }
                 return

@@ -122,6 +122,20 @@ enum Verification {
             print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
             return
         }
+        if ProcessInfo.processInfo.environment["DELETESLIDE"] != nil {   // slide list focused: Delete removes the slide, ⌘Z brings it back
+            delegate.window.makeFirstResponder(delegate.table)
+            let count = presentation.slides.count
+            let paths = presentation.slides.map(\.path)
+            let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: delegate.window.windowNumber, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+            delegate.window.sendEvent(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  Delete in the slide list: \(count) -> \(presentation.slides.count) slides, now on slide \(delegate.index + 1), removed \(Set(paths).subtracting(presentation.slides.map(\.path)))")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after undo: \(presentation.slides.count) slides, order restored: \(presentation.slides.map(\.path) == paths), on slide \(delegate.index + 1)")
+            delegate.undo.redo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after redo: \(presentation.slides.count) slides")
+            return
+        }
         if ProcessInfo.processInfo.environment["NEWSLIDE"] != nil {   // slide list focused: Return adds a slide, ⌘Z removes it
             delegate.window.makeFirstResponder(delegate.table)
             let count = presentation.slides.count
@@ -218,6 +232,37 @@ enum Verification {
             }
         }
         print("\(count) text objects draw below their frame")
+    }
+    /// Every relationship target and every content-type override must point at a part that exists.
+    static func packageProblems(in folder: URL) -> [String] {
+        var problems: [String] = []
+        let root = folder.resolvingSymlinksInPath()
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return ["cannot read package"] }
+        for case let url as URL in walker where url.pathExtension == "rels" {
+            let relative = String(url.resolvingSymlinksInPath().path.dropFirst(root.path.count + 1))
+            let base = ((relative as NSString).deletingLastPathComponent as NSString).deletingLastPathComponent
+            let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+            for chunk in text.components(separatedBy: "<Relationship ").dropFirst() where !chunk.contains("TargetMode=\"External\"") {
+                guard let start = chunk.range(of: "Target=\"") else { continue }
+                let target = String(chunk[start.upperBound...].prefix { $0 != "\"" })
+                let resolved = Presentation.resolveTarget(target, from: base)
+                if !FileManager.default.fileExists(atPath: folder.appendingPathComponent(resolved).path) { problems.append("\(relative) -> missing \(resolved)") }
+            }
+        }
+        let types = (try? String(contentsOf: folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)) ?? ""
+        for chunk in types.components(separatedBy: "<Override PartName=\"").dropFirst() {
+            let part = String(chunk.prefix { $0 != "\"" })
+            if !FileManager.default.fileExists(atPath: folder.appendingPathComponent(String(part.dropFirst())).path) { problems.append("content type for missing \(part)") }
+        }
+        return problems
+    }
+    static func partNames(in folder: URL) -> Set<String> {
+        var names = Set<String>()
+        let root = folder.resolvingSymlinksInPath()
+        if let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: [.isRegularFileKey]) {
+            for case let url as URL in walker where (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true { names.insert(String(url.resolvingSymlinksInPath().path.dropFirst(root.path.count + 1))) }
+        }
+        return names
     }
     static func run() {
         do {
@@ -525,6 +570,30 @@ enum Verification {
             let removedTypes = try String(contentsOf: afterRemoval.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
             guard afterRemoval.slides.count == existingStructure.count, !removedTypes.contains("PartName=\"/\(created.path)\""),
                   !FileManager.default.fileExists(atPath: afterRemoval.folder.appendingPathComponent(created.path).path) else { throw AppError.message("Undoing the new slide left parts behind") }
+            // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
+            let deleteURL = output.appendingPathComponent("delete.pptx")
+            try? FileManager.default.removeItem(at: deleteURL)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: deleteURL)
+            let deckBefore = try Presentation(url: deleteURL)
+            let partsBefore = packageProblems(in: deckBefore.folder).isEmpty ? partNames(in: deckBefore.folder) : []
+            guard !partsBefore.isEmpty else { throw AppError.message("The original deck has package problems: \(packageProblems(in: deckBefore.folder))") }
+            let structureBefore = deckBefore.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
+            let pathsBefore = deckBefore.slides.map(\.path)
+            let removedSlide = try deckBefore.removeSlide(at: 1)
+            try deckBefore.saveInPlace()
+            let afterDelete = try Presentation(url: deleteURL)
+            guard afterDelete.slides.count == pathsBefore.count - 1, afterDelete.slides.map(\.path) == pathsBefore.enumerated().filter { $0.offset != 1 }.map(\.element),
+                  packageProblems(in: afterDelete.folder).isEmpty,
+                  !partNames(in: afterDelete.folder).contains(pathsBefore[1]),
+                  !partNames(in: afterDelete.folder).contains(where: { $0.contains("notesSlide") && !partsBefore.contains($0) }),
+                  partNames(in: afterDelete.folder).count < partsBefore.count else { throw AppError.message("Deleting a slide left the package inconsistent: \(packageProblems(in: afterDelete.folder))") }
+            var structureWithout = structureBefore; structureWithout.remove(at: 1)
+            guard afterDelete.slides.map({ $0.fadeGroups.map { $0.map(\.id) } }) == structureWithout else { throw AppError.message("Deleting a slide changed other slides' Fade") }
+            try deckBefore.restoreSlide(removedSlide)
+            try deckBefore.saveInPlace()
+            let afterUndo = try Presentation(url: deleteURL)
+            guard afterUndo.slides.map(\.path) == pathsBefore, afterUndo.slides.map({ $0.fadeGroups.map { $0.map(\.id) } }) == structureBefore,
+                  packageProblems(in: afterUndo.folder).isEmpty, partNames(in: afterUndo.folder) == partsBefore else { throw AppError.message("Undoing the deletion did not restore the deck: \(packageProblems(in: afterUndo.folder))") }
             let listURL = output.appendingPathComponent("numbers.pptx")
             try listDoc.save(to: listURL)
             let listBack = try Presentation(url: listURL)

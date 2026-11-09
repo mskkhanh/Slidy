@@ -190,6 +190,24 @@ extension AppDelegate {
         undo.setActionName("Thêm slide")
         showSlideRow(max(0, min(position - 1, presentation.slides.count - 1)))
     }
+    /// Delete in the slide list removes the selected slide (no confirmation: ⌘Z brings it back with its Fade).
+    func deleteSlideInDeck(at position: Int) {
+        guard let presentation, !busy, !showingRecents, presentation.slides.count > 1 else { NSSound.beep(); return }
+        canvas.finishEditing(commit: true)
+        let removed: RemovedSlide
+        do { removed = try presentation.removeSlide(at: position) } catch { showError(error); return }
+        undo.registerUndo(withTarget: self) { $0.restoreSlideInDeck(removed) }
+        undo.setActionName("Xóa slide")
+        showSlideRow(min(position, presentation.slides.count - 1))
+    }
+    func restoreSlideInDeck(_ removed: RemovedSlide) {
+        guard let presentation else { return }
+        canvas.finishEditing(commit: true)
+        do { try presentation.restoreSlide(removed) } catch { showError(error); return }
+        undo.registerUndo(withTarget: self) { $0.deleteSlideInDeck(at: removed.index) }
+        undo.setActionName("Xóa slide")
+        showSlideRow(removed.index)
+    }
     private func showSlideRow(_ row: Int) {
         index = row
         thumbnailCache.removeAllObjects()
