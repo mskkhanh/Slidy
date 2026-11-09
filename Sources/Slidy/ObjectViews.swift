@@ -125,6 +125,8 @@ final class SelectionOverlay: NSView {
     var rects: [CGRect] = []
     var handles: [CGRect] = []
     var marquee: CGRect?
+    /// Alignment guides shown while dragging (slide coordinates).
+    var guides: [(CGPoint, CGPoint)] = []
     var lineWidth: CGFloat = 1
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
@@ -135,6 +137,10 @@ final class SelectionOverlay: NSView {
         for handle in handles {
             NSColor.white.setFill(); NSBezierPath(rect: handle).fill()
             let path = NSBezierPath(rect: handle); path.lineWidth = lineWidth; path.stroke()
+        }
+        if !guides.isEmpty {
+            NSColor.systemPink.setStroke()
+            for (from, to) in guides { let line = NSBezierPath(); line.lineWidth = lineWidth; line.move(to: from); line.line(to: to); line.stroke() }
         }
         if let marquee {
             accent.withAlphaComponent(0.15).setFill(); NSBezierPath(rect: marquee).fill()

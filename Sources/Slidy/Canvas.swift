@@ -48,6 +48,9 @@ final class CanvasView: NSView {
     private var resizeCorner: CGPoint?
     private var marqueeStart: CGPoint?
     private var marqueeBase: [SlideItem] = []
+    /// Editing zoom (pinch on the trackpad). 1 fits the slide to the window; it never changes the file.
+    private(set) var zoom: CGFloat = 1
+    private var panOffset = CGPoint.zero
     private var surfaceScale: CGFloat { max(0.01, surface.frame.width / max(1, surface.bounds.width)) }
     private var editedDrag = false
     /// Selection outline, handles and marquee are drawn by one transparent view kept above every object.
@@ -62,14 +65,43 @@ final class CanvasView: NSView {
     }
     required init?(coder: NSCoder) { fatalError() }
     override func draw(_ dirtyRect: NSRect) { NSColor.black.setFill(); bounds.fill() }
+    /// Pinch: zoom around the pointer so the point under it stays put.
+    override func magnify(with event: NSEvent) {
+        guard !presenting, presentation != nil else { return }
+        let pointer = convert(event.locationInWindow, from: nil)
+        let oldFrame = surface.frame
+        let newZoom = min(8, max(0.4, zoom * (1 + event.magnification)))
+        guard newZoom != zoom else { return }
+        let ratio = newZoom / zoom
+        // New origin keeps the slide point under the pointer fixed.
+        let newOrigin = CGPoint(x: pointer.x - (pointer.x - oldFrame.minX) * ratio, y: pointer.y - (pointer.y - oldFrame.minY) * ratio)
+        zoom = newZoom
+        let size = CGSize(width: oldFrame.width * ratio, height: oldFrame.height * ratio)
+        panOffset = CGPoint(x: newOrigin.x - (bounds.width - size.width) / 2, y: newOrigin.y - (bounds.height - size.height) / 2)
+        needsLayout = true; layoutSubtreeIfNeeded()
+    }
+    /// Two-finger scroll moves the slide while zoomed in.
+    override func scrollWheel(with event: NSEvent) {
+        guard !presenting, zoom > 1 else { super.scrollWheel(with: event); return }
+        panOffset.x += event.scrollingDeltaX; panOffset.y += event.scrollingDeltaY
+        needsLayout = true
+    }
+    var guideCount: Int { overlay.guides.count }
+    func resetZoom() { zoom = 1; panOffset = .zero; needsLayout = true }
     override func layout() {
         super.layout()
         guard let presentation else { surface.isHidden = true; return }
         surface.isHidden = false
         let margin: CGFloat = presenting ? 0 : 28
         let scale = max(0.01, min((bounds.width - margin * 2) / presentation.size.width, (bounds.height - margin * 2) / presentation.size.height))
-        let size = CGSize(width: presentation.size.width * scale, height: presentation.size.height * scale)
-        surface.frame = CGRect(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2, width: size.width, height: size.height)
+        let effectiveZoom = presenting ? 1 : zoom
+        let size = CGSize(width: presentation.size.width * scale * effectiveZoom, height: presentation.size.height * scale * effectiveZoom)
+        if zoom > 1 {   // keep at least part of the slide reachable
+            let limitX = (size.width + bounds.width) / 2 - 80, limitY = (size.height + bounds.height) / 2 - 80
+            panOffset.x = min(max(panOffset.x, -limitX), limitX); panOffset.y = min(max(panOffset.y, -limitY), limitY)
+        }
+        let pan = presenting || zoom <= 1 ? CGPoint.zero : panOffset
+        surface.frame = CGRect(x: (bounds.width - size.width) / 2 + pan.x, y: (bounds.height - size.height) / 2 + pan.y, width: size.width, height: size.height)
         surface.bounds = CGRect(origin: .zero, size: presentation.size)
         updateSelection()
         updateOrderBadges()
@@ -241,6 +273,12 @@ final class CanvasView: NSView {
         guard abs(dx) + abs(dy) > 0.5 else { return }
         if !editedDrag { onWillEdit?(); editedDrag = true }
         if !dragFrames.isEmpty {   // several selected objects move together
+            var dx = dx, dy = dy
+            if !event.modifierFlags.contains(.command), let first = dragFrames.values.first {
+                let union = dragFrames.values.dropFirst().reduce(first) { $0.union($1) }.offsetBy(dx: dx, dy: dy)
+                let snap = snapped(union, excluding: Set(dragFrames.keys))
+                dx += snap.dx; dy += snap.dy; overlay.guides = snap.guides
+            } else { overlay.guides = [] }
             for moved in selection where moved.canMove {
                 guard var frame = dragFrames[ObjectIdentifier(moved)] else { continue }
                 frame.origin.x += dx; frame.origin.y += dy
@@ -265,10 +303,47 @@ final class CanvasView: NSView {
                 frame.size.width = max(30, originalFrame.width + dx)
                 frame.size.height = max(24, originalFrame.height + dy)
             }
-        } else { frame.origin.x += dx; frame.origin.y += dy }
+        } else {
+            frame.origin.x += dx; frame.origin.y += dy
+            if !event.modifierFlags.contains(.command) {
+                let snap = snapped(frame, excluding: [ObjectIdentifier(item)])
+                frame.origin.x += snap.dx; frame.origin.y += snap.dy; overlay.guides = snap.guides
+            } else { overlay.guides = [] }
+        }
         item.updateFrame(frame); host.frame = frame; updateSelection()
     }
+    /// Smart guides: snaps a moving rectangle to the edges and centres of the other objects and of the slide
+    /// (within 6 screen points) and returns the guide lines to draw. Hold ⌘ while dragging to move freely.
+    private func snapped(_ rect: CGRect, excluding: Set<ObjectIdentifier>) -> (dx: CGFloat, dy: CGFloat, guides: [(CGPoint, CGPoint)]) {
+        guard let slide, let presentation else { return (0, 0, []) }
+        let threshold = 6 / surfaceScale
+        var targets = slide.items.filter { !excluding.contains(ObjectIdentifier($0)) && !$0.inherited && $0.frame.width > 0 }.map(\.frame)
+        targets.append(CGRect(origin: .zero, size: presentation.size))
+        func xs(_ r: CGRect) -> [CGFloat] { [r.minX, r.midX, r.maxX] }
+        func ys(_ r: CGRect) -> [CGFloat] { [r.minY, r.midY, r.maxY] }
+        func best(_ moving: [CGFloat], _ fixed: [[CGFloat]]) -> CGFloat {
+            var result: CGFloat?
+            for values in fixed { for target in values { for mine in moving {
+                let delta = target - mine
+                if abs(delta) <= threshold, result == nil || abs(delta) < abs(result!) { result = delta }
+            } } }
+            return result ?? 0
+        }
+        let dx = best(xs(rect), targets.map(xs)), dy = best(ys(rect), targets.map(ys))
+        let moved = rect.offsetBy(dx: dx, dy: dy)
+        var guides: [(CGPoint, CGPoint)] = []
+        for target in targets {
+            for value in xs(target) where xs(moved).contains(where: { abs($0 - value) < 0.5 }) {
+                guides.append((CGPoint(x: value, y: min(moved.minY, target.minY)), CGPoint(x: value, y: max(moved.maxY, target.maxY))))
+            }
+            for value in ys(target) where ys(moved).contains(where: { abs($0 - value) < 0.5 }) {
+                guides.append((CGPoint(x: min(moved.minX, target.minX), y: value), CGPoint(x: max(moved.maxX, target.maxX), y: value)))
+            }
+        }
+        return (dx, dy, guides)
+    }
     func objectMouseUp(_ view: ObjectView, event: NSEvent) {
+        overlay.guides = []; overlay.needsDisplay = true
         endMarquee()
         if !editedDrag, let clicked = pendingCollapse { selected = clicked }
         pendingCollapse = nil; dragFrames = [:]

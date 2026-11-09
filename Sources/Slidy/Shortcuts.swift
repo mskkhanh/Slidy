@@ -25,6 +25,7 @@ enum Shortcuts {
         ]),
         ("Objects on the slide", [
             ("Click / ⇧-click", "Select an object / add or remove it from the selection (a marquee selects objects it fully encloses)"),
+            ("Drag", "Move objects with alignment guides that snap to other objects and the slide (hold ⌘ to move freely)"),
             ("⌥-click", "Select the object underneath (e.g. a card behind its text); repeat to go deeper"),
             ("Enter", "Edit the text of the selected object"),
             ("⇧Enter", "New line inside a text box"),
@@ -42,6 +43,8 @@ enum Shortcuts {
         ]),
         ("View", [
             ("⌘B", "Hide / show the left sidebar"),
+            ("Pinch", "Zoom in / out around the pointer (trackpad); two-finger scroll moves the slide while zoomed in"),
+            ("⌘0", "Fit the slide to the window (reset zoom)"),
             ("⌘L", "Switch night / light mode (also the moon / sun button, top right; display only, never changes the file)")
         ]),
         ("Help", [

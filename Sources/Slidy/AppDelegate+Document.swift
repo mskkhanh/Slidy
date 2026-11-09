@@ -46,7 +46,7 @@ extension AppDelegate {
                     self.table.deselectAll(nil)
                     self.table.setAccessibilityLabel("Slides")
                     self.table.rowHeight = 106; self.table.intercellSpacing = NSSize(width: 0, height: 4)
-                    self.showingRecents = false; self.emptyRecents.isHidden = true
+                    self.showingRecents = false; self.emptyRecents.isHidden = true; self.canvas.resetZoom()
                     self.presentation = document; self.savedURL = nil; self.modified = false; self.index = position
                     self.undo.removeAllActions(); self.thumbnailCache.removeAllObjects()
                     self.table.reloadData()

@@ -31,6 +31,7 @@ extension AppDelegate {
         let view = NSMenu(title: "Xem")
         view.addItem(menuItem("Chế độ tối / sáng", #selector(toggleNight), key: "l"))
         view.addItem(menuItem("Ẩn / hiện thanh bên trái", #selector(toggleSidebar), key: "b"))
+        view.addItem(menuItem("Vừa khung (bỏ zoom)", #selector(fitZoom), key: "0"))
         let viewItem = NSMenuItem(); viewItem.submenu = view; menu.addItem(viewItem)
         let help = NSMenu(title: "Trợ giúp")
         help.addItem(menuItem("Phím tắt", #selector(toggleShortcuts), key: "/"))
@@ -52,6 +53,7 @@ extension AppDelegate {
         canvas.rebuild(); canvas.needsDisplay = true
         if presentation != nil, !showingRecents { table.reloadData() }
     }
+    @objc func fitZoom() { canvas.resetZoom() }
     @objc func toggleSidebar() { setSidebarHidden(!sidebarHidden) }
     func setSidebarHidden(_ hidden: Bool, remember: Bool = true) {
         sidebarHidden = hidden
