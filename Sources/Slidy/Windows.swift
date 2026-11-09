@@ -8,11 +8,17 @@ final class PresentationWindow: NSWindow {
 final class SlideEditorWindow: NSWindow {
     var onShortcut: ((String) -> Void)?
     var onEscape: (() -> Bool)?
+    /// The slide thumbnail list: Return there adds a slide.
+    weak var slideList: NSView?
 
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, attachedSheet == nil, let onShortcut {
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers.isEmpty, event.keyCode == 53, !(firstResponder is NSTextView), onEscape?() == true { return }
+            if modifiers.isEmpty, [36, 76].contains(event.keyCode), let slideList, firstResponder === slideList {
+                if !event.isARepeat { onShortcut("newSlide") }
+                return
+            }
             if modifiers == .command, [125, 126].contains(event.keyCode), !(firstResponder is NSTextView) {
                 if !event.isARepeat { onShortcut(event.keyCode == 125 ? "slideNext" : "slidePrevious") }
                 return

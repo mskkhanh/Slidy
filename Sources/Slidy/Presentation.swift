@@ -11,6 +11,8 @@ final class Presentation {
     var sourceStamp: Date?
     /// Slide order changed since presentation.xml was last written into the work folder.
     var orderDirty = false
+    /// Slides created in this session (their files may be removed again by undo).
+    var insertedSlidePaths = Set<String>()
     var slides: [Slide] = []
     var size = CGSize(width: 960, height: 540)
     lazy var textLeftMargin: CGFloat = {
@@ -33,7 +35,7 @@ final class Presentation {
     var majorFont = "Helvetica Neue"
     var minorFont = "Helvetica Neue"
     var missingFonts = Set<String>()
-    private var xmlCache: [String: XMLDocument] = [:]
+    var xmlCache: [String: XMLDocument] = [:]
     let imageCache = NSCache<NSString, NSImage>()
     init(url: URL) throws {
         source = url

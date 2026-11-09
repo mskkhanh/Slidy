@@ -43,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         makeMenus()
         let editorWindow = SlideEditorWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window = editorWindow
+        editorWindow.slideList = table
         editorWindow.onEscape = { [weak self] in
             guard let self, self.presentation != nil, self.showingRecents else { return false }
             self.toggleRecents(); return true
@@ -53,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "t": self?.addText()
             case "h": self?.addHeading()
             case "present": self?.presentSlides()
+            case "newSlide": self?.insertSlideInDeck(after: self?.index ?? 0)
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)
             default: break

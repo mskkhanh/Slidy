@@ -122,6 +122,19 @@ enum Verification {
             print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
             return
         }
+        if ProcessInfo.processInfo.environment["NEWSLIDE"] != nil {   // slide list focused: Return adds a slide, ⌘Z removes it
+            delegate.window.makeFirstResponder(delegate.table)
+            let count = presentation.slides.count
+            let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: delegate.window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36)!
+            delegate.window.sendEvent(key)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  Return in the slide list: \(count) -> \(presentation.slides.count) slides, now on slide \(delegate.index + 1) (\(presentation.slides[delegate.index].items.map(\.text)))")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after undo: \(presentation.slides.count) slides, on slide \(delegate.index + 1)")
+            delegate.undo.redo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after redo: \(presentation.slides.count) slides, on slide \(delegate.index + 1)")
+            return
+        }
         let slide = presentation.slides[slideIndex]
         for (step, id) in arguments.dropFirst(2).enumerated() {
             guard let item = slide.items.first(where: { $0.id == id }) else { print("no object \(id)"); continue }
@@ -474,6 +487,44 @@ enum Verification {
             guard typing.string == "1.\tA\n2.\t" else { throw AppError.message("Return did not continue the numbering: \(typing.string.debugDescription)") }
             key(36, "\r")
             guard typing.string == "1.\tA\n" else { throw AppError.message("Return on an empty item did not leave the list: \(typing.string.debugDescription)") }
+            // A new slide: heading and body styled like the deck, a valid package, other slides untouched, undo removes it all.
+            let newURL = output.appendingPathComponent("newslide.pptx")
+            try? FileManager.default.removeItem(at: newURL)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: newURL)
+            let withNew = try Presentation(url: newURL)
+            let existingStructure = withNew.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
+            let reference = withNew.slides[1]
+            let created = try withNew.insertSlide(after: 1)
+            try withNew.saveInPlace()
+            let reloaded = try Presentation(url: newURL)
+            guard reloaded.slides.count == existingStructure.count + 1, reloaded.slides[2].items.count == 2 else { throw AppError.message("New slide has the wrong shape") }
+            let newTexts = reloaded.slides[2].items.map(\.text)
+            guard newTexts == ["Tiêu đề", "Nội dung"] || newTexts == ["Nội dung", "Tiêu đề"] else { throw AppError.message("New slide text is wrong: \(newTexts)") }
+            func look(_ item: SlideItem) -> String {
+                let font = item.paragraphs.first?.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
+                let colour = (item.paragraphs.first?.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.hex ?? "-"
+                return "\(font?.fontName ?? "-") \(font?.pointSize ?? 0) \(colour) \(item.frame.integral)"
+            }
+            for newItem in reloaded.slides[2].items {
+                guard let source = reference.items.first(where: { $0.id == newItem.id }), look(newItem) == look(source) else { throw AppError.message("New slide item \(newItem.id) does not look like the deck's: \(look(newItem))") }
+            }
+            guard reloaded.slides[2].background.hex == reference.background.hex else { throw AppError.message("New slide background differs") }
+            var expectedWithNew = existingStructure; expectedWithNew.insert([], at: 2)
+            guard reloaded.slides.map({ $0.fadeGroups.map { $0.map(\.id) } }) == expectedWithNew else { throw AppError.message("Adding a slide changed other slides' Fade") }
+            // Package consistency: every relationship target exists, the slide is listed once, content type present.
+            let relText = try String(contentsOf: reloaded.folder.appendingPathComponent("ppt/_rels/presentation.xml.rels"), encoding: .utf8)
+            let targets = relText.components(separatedBy: "Target=\"").dropFirst().map { String($0.prefix { $0 != "\"" }) }
+            guard targets.allSatisfy({ FileManager.default.fileExists(atPath: reloaded.folder.appendingPathComponent("ppt/" + $0).path) }) else { throw AppError.message("A relationship points at a missing part") }
+            let types = try String(contentsOf: reloaded.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
+            guard types.contains("PartName=\"/\(created.path)\""), (try String(contentsOf: reloaded.folder.appendingPathComponent("ppt/presentation.xml"), encoding: .utf8)).components(separatedBy: "<p:sldId ").count - 1 == existingStructure.count + 1 else { throw AppError.message("New slide is not registered correctly") }
+            let slideRels = try String(contentsOf: reloaded.folder.appendingPathComponent("ppt/slides/_rels/" + (created.path as NSString).lastPathComponent + ".rels"), encoding: .utf8)
+            guard slideRels.contains("slideLayout") else { throw AppError.message("New slide has no layout") }
+            try withNew.removeInsertedSlide(at: 2)
+            try withNew.saveInPlace()
+            let afterRemoval = try Presentation(url: newURL)
+            let removedTypes = try String(contentsOf: afterRemoval.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
+            guard afterRemoval.slides.count == existingStructure.count, !removedTypes.contains("PartName=\"/\(created.path)\""),
+                  !FileManager.default.fileExists(atPath: afterRemoval.folder.appendingPathComponent(created.path).path) else { throw AppError.message("Undoing the new slide left parts behind") }
             let listURL = output.appendingPathComponent("numbers.pptx")
             try listDoc.save(to: listURL)
             let listBack = try Presentation(url: listURL)

@@ -13,6 +13,7 @@ enum Shortcuts {
             ("⌘Z / ⇧⌘Z", "Undo / Redo"),
             ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste (images too)"),
             ("⌘A", "Select all objects on the slide"),
+            ("Return", "With the slide list focused: add a new slide after the selected one (heading and text box styled like your other slides; ⌘Z removes it)"),
             ("⌘↑ / ⌘↓", "Go to the previous / next slide while editing; with the slide list focused (click a slide on the left), move that slide up / down in the deck")
         ]),
         ("Insert and effects", [

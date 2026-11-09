@@ -171,3 +171,32 @@ extension AppDelegate {
         didChange()
     }
 }
+
+extension AppDelegate {
+    /// Return in the slide list: a new slide after the selected one, styled like the deck's content slides. ⌘Z removes it.
+    func insertSlideInDeck(after position: Int) {
+        guard let presentation, !busy, !showingRecents else { return }
+        canvas.finishEditing(commit: true)
+        do { try presentation.insertSlide(after: position) } catch { showError(error); return }
+        undo.registerUndo(withTarget: self) { $0.removeSlideInDeck(at: position + 1) }
+        undo.setActionName("Thêm slide")
+        showSlideRow(position + 1)
+    }
+    func removeSlideInDeck(at position: Int) {
+        guard let presentation else { return }
+        canvas.finishEditing(commit: true)
+        do { try presentation.removeInsertedSlide(at: position) } catch { showError(error); return }
+        undo.registerUndo(withTarget: self) { $0.insertSlideInDeck(after: position - 1) }
+        undo.setActionName("Thêm slide")
+        showSlideRow(max(0, min(position - 1, presentation.slides.count - 1)))
+    }
+    private func showSlideRow(_ row: Int) {
+        index = row
+        thumbnailCache.removeAllObjects()
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        table.scrollRowToVisible(row)
+        window.makeFirstResponder(table)
+        didChange()
+    }
+}
