@@ -278,6 +278,7 @@ final class Presentation {
                 let width = index < widths.count ? widths[index] : 100
                 let item = SlideItem(node: cell, id: "cell-\(items.count)", frame: CGRect(x: x, y: y, width: width, height: height))
                 item.isTableCell = true
+                item.tableNode = node; item.tableID = node.descendant("cNvPr")?.attr("id") ?? "table"
                 let props = cell.child("tcPr")
                 item.fill = color(props?.child("solidFill")); item.stroke = color(props?.child("lnB")?.child("solidFill")); item.strokeWidth = 0.7
                 configureText(item)

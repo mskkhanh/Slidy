@@ -122,6 +122,30 @@ enum Verification {
             print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
             return
         }
+        if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
+            let slide = presentation.slides[slideIndex]
+            let cells = slide.items.filter(\.isTableCell)
+            guard let cell = cells.first else { print("  no table on this slide"); return }
+            let local = delegate.canvas.surface.convert(CGPoint(x: cell.frame.midX, y: cell.frame.midY), to: nil)
+            let n = delegate.window.windowNumber
+            func mouse(_ type: NSEvent.EventType) -> NSEvent { NSEvent.mouseEvent(with: type, location: local, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 5, clickCount: 1, pressure: 1)! }
+            delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            if let hit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(local, from: nil)) {
+                var view: NSView? = hit; while let current = view, !(current is ObjectView) { view = current.superview }
+                (view as? ObjectView)?.mouseDown(with: mouse(.leftMouseDown)); (view as? ObjectView)?.mouseUp(with: mouse(.leftMouseUp))
+            }
+            print("  clicked a cell: \(delegate.canvas.selection.count) of \(cells.count) table cells selected")
+            let before = slide.document.xmlString.components(separatedBy: "<a:tbl>").count - 1
+            let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51)!
+            delegate.window.makeFirstResponder(delegate.canvas)
+            delegate.canvas.keyDown(with: key)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after Delete: cells left \(slide.items.filter(\.isTableCell).count), tables in the slide XML \(before) -> \(slide.document.xmlString.components(separatedBy: "<a:tbl>").count - 1)")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            let restored = presentation.slides[slideIndex]
+            print("  after undo: cells \(restored.items.filter(\.isTableCell).count), tables in XML \(restored.document.xmlString.components(separatedBy: "<a:tbl>").count - 1)")
+            return
+        }
         if ProcessInfo.processInfo.environment["CARET"] != nil {   // is the system caret animating while editing?
             NSApp.activate(ignoringOtherApps: true)
             delegate.window.makeKeyAndOrderFront(nil)

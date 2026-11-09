@@ -138,9 +138,24 @@ extension AppDelegate {
         item.node.detach(); slide.tree.insertChild(item.node, at: forward ? nodeIndex : nodeIndex)
         slide.items.swapAt(position, next); canvas.rebuild(); didChange()
     }
+    /// Delete: removes every selected object. A selected table (any of its cells) goes as a whole.
     @objc func deleteObject() {
-        guard let item = canvas.selected, let slide = canvas.slide, item.canMove else { return }
-        canvas.finishEditing(commit: true); checkpoint(); item.node.detach(); slide.items.removeAll { $0 === item }; slide.timingDirty = true
+        guard let slide = canvas.slide, !canvas.selection.isEmpty else { return }
+        canvas.finishEditing(commit: true)
+        var doomed: [SlideItem] = []
+        for item in canvas.selection {
+            if item.isTableCell { doomed += slide.items.filter { $0.tableID == item.tableID } }
+            else if item.canMove { doomed.append(item) }
+        }
+        guard !doomed.isEmpty else { return }
+        checkpoint()
+        var detachedTables = Set<ObjectIdentifier>()
+        for item in doomed {
+            if let table = item.tableNode { if detachedTables.insert(ObjectIdentifier(table)).inserted { table.detach() } }
+            else { item.node.detach() }
+        }
+        slide.items.removeAll { item in doomed.contains { $0 === item } }
+        slide.timingDirty = true
         canvas.selected = nil; canvas.rebuild(); didChange()
     }
 }

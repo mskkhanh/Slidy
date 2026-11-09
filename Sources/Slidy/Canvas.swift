@@ -27,6 +27,11 @@ final class CanvasView: NSView {
         get { selection.count == 1 ? selection.first : nil }
         set { select(newValue.map { [$0] } ?? []) }
     }
+    /// The objects that are selected together with `item`: all cells of its table, or the object itself.
+    func members(of item: SlideItem) -> [SlideItem] {
+        guard let id = item.tableID, let slide else { return [item] }
+        return slide.items.filter { $0.tableID == id }
+    }
     /// ⌘A on the slide: selects every movable object.
     override func selectAll(_ sender: Any?) {
         guard !presenting, editor == nil, let slide else { return }
@@ -203,7 +208,13 @@ final class CanvasView: NSView {
     func updateSelection() {
         let scale = surfaceScale
         if !selection.isEmpty, !presenting, editor == nil {
-            overlay.rects = selection.map(\.frame)
+            var outlines: [CGRect] = [], tableIndex: [String: Int] = [:]
+            for item in selection {   // a selected table is one outline, not one per cell
+                if let id = item.tableID {
+                    if let at = tableIndex[id] { outlines[at] = outlines[at].union(item.frame) } else { tableIndex[id] = outlines.count; outlines.append(item.frame) }
+                } else { outlines.append(item.frame) }
+            }
+            overlay.rects = outlines
             overlay.handles = []
             if let selected, selected.canMove {
                 let radius: CGFloat = (selected.imageURL == nil ? 4 : 6) / scale
@@ -244,9 +255,10 @@ final class CanvasView: NSView {
         window?.makeFirstResponder(self)
         dragOrigin = nil
         if event.type == .leftMouseDown, !event.modifierFlags.intersection([.shift, .command]).isEmpty {
-            guard view.item.canMove else { return }
-            let items = selection.filter(\.canMove)
-            select(items.contains(where: { $0 === view.item }) ? items.filter { $0 !== view.item } : items + [view.item])
+            guard view.item.canMove || view.item.isTableCell else { return }
+            let group = members(of: view.item)
+            let present = selection.contains { $0 === view.item }
+            select(present ? selection.filter { chosen in !group.contains { $0 === chosen } } : selection + group)
             return
         }
         let point = surface.convert(event.locationInWindow, from: nil)
@@ -261,7 +273,7 @@ final class CanvasView: NSView {
         // A plain click on one of several selected objects keeps the selection so they can be dragged together;
         // releasing without a drag then narrows the selection to the clicked object.
         let keepsMultiSelection = selection.count > 1 && selection.contains { $0 === target } && !event.modifierFlags.contains(.option)
-        if !keepsMultiSelection { selected = target }
+        if !keepsMultiSelection { select(members(of: target)) }   // a click on a table cell selects the whole table
         pendingCollapse = keepsMultiSelection ? target : nil
         if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(at: point); return }
         guard target.canMove else { return }
@@ -386,7 +398,7 @@ final class CanvasView: NSView {
     func objectMouseUp(_ view: ObjectView, event: NSEvent) {
         overlay.guides = []; overlay.needsDisplay = true
         endMarquee()
-        if !editedDrag, let clicked = pendingCollapse { selected = clicked }
+        if !editedDrag, let clicked = pendingCollapse { select(members(of: clicked)) }
         pendingCollapse = nil; dragFrames = [:]
         dragOrigin = nil
         if editedDrag { editedDrag = false; rebuild(); onChanged?() }
@@ -554,8 +566,10 @@ final class CanvasView: NSView {
             }
         }
         stopCaret()
+        let editedCell = selected?.isTableCell == true ? selected : nil
         editor.removeFromSuperview(); self.editor = nil
         rebuild(); window?.makeFirstResponder(self)
+        if let editedCell { select(members(of: editedCell)) }
     }
     func advance() {
         if step < fadeSteps.count {
@@ -604,7 +618,7 @@ final class CanvasView: NSView {
             if !event.isARepeat { onReorderFade?(event.keyCode == 126 ? -1 : 1) }
             return
         }
-        if [51, 117].contains(event.keyCode), selected?.canMove == true,
+        if [51, 117].contains(event.keyCode), !selection.isEmpty,
            event.modifierFlags.intersection([.command, .control, .option]).isEmpty {
             if !event.isARepeat { onDelete?() }
             return

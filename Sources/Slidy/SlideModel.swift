@@ -36,6 +36,9 @@ final class SlideItem {
     var imageURL: URL?
     var imageCrop = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
     var isTableCell = false
+    /// For table cells: the table's <p:graphicFrame> and its id. Cells are selected and deleted as one table.
+    var tableNode: XMLElement?
+    var tableID: String?
     var inherited = false
     private static let fadeOffURI = "urn:slidepresent:fade-off"
     private var fadeOffMarker: XMLElement? {
