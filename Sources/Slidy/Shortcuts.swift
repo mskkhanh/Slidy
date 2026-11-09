@@ -25,7 +25,7 @@ enum Shortcuts {
         ]),
         ("Objects on the slide", [
             ("Click / ⇧-click", "Select an object / add or remove it from the selection (a marquee selects objects it fully encloses)"),
-            ("Drag", "Move objects with alignment guides that snap to other objects and the slide (hold ⌘ to move freely)"),
+            ("Drag / resize", "Moving or resizing (corner handle) shows alignment guides that snap to other objects and the slide (hold ⌘ to move or resize freely)"),
             ("⌥-click", "Select the object underneath (e.g. a card behind its text); repeat to go deeper"),
             ("Enter", "Edit the text of the selected object"),
             ("⇧Enter", "New line inside a text box"),

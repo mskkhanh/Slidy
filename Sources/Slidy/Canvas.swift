@@ -304,6 +304,9 @@ final class CanvasView: NSView {
                 frame.size.width = max(30, originalFrame.width + dx)
                 frame.size.height = max(24, originalFrame.height + dy)
             }
+            if !event.modifierFlags.contains(.command) {
+                frame = snapResize(frame, original: originalFrame, corner: corner, isImage: item.imageURL != nil, item: item)
+            } else { overlay.guides = [] }
         } else {
             frame.origin.x += dx; frame.origin.y += dy
             if !event.modifierFlags.contains(.command) {
@@ -313,35 +316,69 @@ final class CanvasView: NSView {
         }
         item.updateFrame(frame); host.frame = frame; updateSelection()
     }
-    /// Smart guides: snaps a moving rectangle to the edges and centres of the other objects and of the slide
-    /// (within 6 screen points) and returns the guide lines to draw. Hold ⌘ while dragging to move freely.
-    private func snapped(_ rect: CGRect, excluding: Set<ObjectIdentifier>) -> (dx: CGFloat, dy: CGFloat, guides: [(CGPoint, CGPoint)]) {
-        guard let slide, let presentation else { return (0, 0, []) }
-        let threshold = 6 / surfaceScale
+    /// Edges and centres that dragged or resized objects snap to: the other objects and the slide itself.
+    private func snapTargets(excluding: Set<ObjectIdentifier>) -> [CGRect] {
+        guard let slide, let presentation else { return [] }
         var targets = slide.items.filter { !excluding.contains(ObjectIdentifier($0)) && !$0.inherited && $0.frame.width > 0 }.map(\.frame)
         targets.append(CGRect(origin: .zero, size: presentation.size))
-        func xs(_ r: CGRect) -> [CGFloat] { [r.minX, r.midX, r.maxX] }
-        func ys(_ r: CGRect) -> [CGFloat] { [r.minY, r.midY, r.maxY] }
-        func best(_ moving: [CGFloat], _ fixed: [[CGFloat]]) -> CGFloat {
-            var result: CGFloat?
-            for values in fixed { for target in values { for mine in moving {
-                let delta = target - mine
-                if abs(delta) <= threshold, result == nil || abs(delta) < abs(result!) { result = delta }
-            } } }
-            return result ?? 0
-        }
-        let dx = best(xs(rect), targets.map(xs)), dy = best(ys(rect), targets.map(ys))
-        let moved = rect.offsetBy(dx: dx, dy: dy)
+        return targets
+    }
+    private static func xs(_ r: CGRect) -> [CGFloat] { [r.minX, r.midX, r.maxX] }
+    private static func ys(_ r: CGRect) -> [CGFloat] { [r.minY, r.midY, r.maxY] }
+    /// The smallest move (within 6 screen points) that puts one of `values` on a target line, or nil.
+    private func nearestSnap(_ values: [CGFloat], targets: [[CGFloat]]) -> CGFloat? {
+        let threshold = 6 / surfaceScale
+        var result: CGFloat?
+        for line in targets { for target in line { for value in values {
+            let delta = target - value
+            if abs(delta) <= threshold, result == nil || abs(delta) < abs(result!) { result = delta }
+        } } }
+        return result
+    }
+    /// Guide lines for every edge or centre of `rect` that sits exactly on an edge or centre of a target.
+    private func guideLines(for rect: CGRect, targets: [CGRect]) -> [(CGPoint, CGPoint)] {
         var guides: [(CGPoint, CGPoint)] = []
         for target in targets {
-            for value in xs(target) where xs(moved).contains(where: { abs($0 - value) < 0.5 }) {
-                guides.append((CGPoint(x: value, y: min(moved.minY, target.minY)), CGPoint(x: value, y: max(moved.maxY, target.maxY))))
+            for value in Self.xs(target) where Self.xs(rect).contains(where: { abs($0 - value) < 0.5 }) {
+                guides.append((CGPoint(x: value, y: min(rect.minY, target.minY)), CGPoint(x: value, y: max(rect.maxY, target.maxY))))
             }
-            for value in ys(target) where ys(moved).contains(where: { abs($0 - value) < 0.5 }) {
-                guides.append((CGPoint(x: min(moved.minX, target.minX), y: value), CGPoint(x: max(moved.maxX, target.maxX), y: value)))
+            for value in Self.ys(target) where Self.ys(rect).contains(where: { abs($0 - value) < 0.5 }) {
+                guides.append((CGPoint(x: min(rect.minX, target.minX), y: value), CGPoint(x: max(rect.maxX, target.maxX), y: value)))
             }
         }
-        return (dx, dy, guides)
+        return guides
+    }
+    /// Smart guides while moving: snaps a rectangle and returns the guide lines. Hold ⌘ to move freely.
+    private func snapped(_ rect: CGRect, excluding: Set<ObjectIdentifier>) -> (dx: CGFloat, dy: CGFloat, guides: [(CGPoint, CGPoint)]) {
+        let targets = snapTargets(excluding: excluding)
+        let dx = nearestSnap(Self.xs(rect), targets: targets.map(Self.xs)) ?? 0
+        let dy = nearestSnap(Self.ys(rect), targets: targets.map(Self.ys)) ?? 0
+        return (dx, dy, guideLines(for: rect.offsetBy(dx: dx, dy: dy), targets: targets))
+    }
+    /// Smart guides while resizing: the edge being dragged snaps to other objects and the slide.
+    private func snapResize(_ frame: CGRect, original: CGRect, corner: CGPoint, isImage: Bool, item: SlideItem) -> CGRect {
+        let targets = snapTargets(excluding: [ObjectIdentifier(item)])
+        let txs = targets.map(Self.xs), tys = targets.map(Self.ys)
+        var frame = frame
+        if !isImage {   // text and shapes grow from the bottom-right handle
+            if let d = nearestSnap([frame.maxX], targets: txs) { frame.size.width = max(30, frame.width + d) }
+            if let d = nearestSnap([frame.maxY], targets: tys) { frame.size.height = max(24, frame.height + d) }
+        } else {        // images keep their proportions: snap the dragged corner on one axis and rescale
+            let left = corner.x == original.minX, top = corner.y == original.minY
+            var factor: CGFloat?
+            if let d = nearestSnap([left ? frame.minX : frame.maxX], targets: txs) { factor = (frame.width + (left ? -d : d)) / frame.width }
+            if let d = nearestSnap([top ? frame.minY : frame.maxY], targets: tys) {
+                let other = (frame.height + (top ? -d : d)) / frame.height
+                if factor == nil || abs(other - 1) < abs(factor! - 1) { factor = other }
+            }
+            if let factor, factor > 0.05 {
+                frame.size = CGSize(width: frame.width * factor, height: frame.height * factor)
+                if left { frame.origin.x = original.maxX - frame.width }
+                if top { frame.origin.y = original.maxY - frame.height }
+            }
+        }
+        overlay.guides = guideLines(for: frame, targets: targets)
+        return frame
     }
     func objectMouseUp(_ view: ObjectView, event: NSEvent) {
         overlay.guides = []; overlay.needsDisplay = true
