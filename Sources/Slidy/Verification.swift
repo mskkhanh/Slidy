@@ -72,6 +72,96 @@ enum Verification {
             print("\(blocked) objects do not receive a click at their centre")
         } catch { fputs("\(error)\n", stderr) }
     }
+    /// `--select deck.pptx slide id id id`: clicks the first object, then shift-clicks the others, like a person would.
+    static func select(arguments: [String]) {
+        _ = NSApplication.shared
+        do {
+            let document = try Presentation(url: URL(fileURLWithPath: arguments[0]))
+            let slide = document.slides[Int(arguments[1])! - 1]
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 720), styleMask: [.borderless], backing: .buffered, defer: false)
+            let canvas = CanvasView(frame: window.contentView!.bounds); canvas.autoresizingMask = [.width, .height]
+            window.contentView!.addSubview(canvas); canvas.showsOrderBadges = true
+            canvas.display(slide, in: document); canvas.layoutSubtreeIfNeeded()
+            for (step, id) in arguments.dropFirst(2).enumerated() {
+                guard let item = slide.items.first(where: { $0.id == id }) else { print("no object \(id)"); continue }
+                let local = canvas.surface.convert(CGPoint(x: item.frame.midX, y: item.frame.midY), to: nil)
+                guard let hit = window.contentView!.hitTest(window.contentView!.convert(local, from: nil)) else { print("\(id): nothing under the click"); continue }
+                var view: NSView? = hit
+                while let current = view, !(current is ObjectView) { view = current.superview }
+                let flags: NSEvent.ModifierFlags = step == 0 ? [] : [.shift]
+                let down = NSEvent.mouseEvent(with: .leftMouseDown, location: local, modifierFlags: flags, timestamp: 1, windowNumber: window.windowNumber, context: nil, eventNumber: step * 2, clickCount: 1, pressure: 1)!
+                let up = NSEvent.mouseEvent(with: .leftMouseUp, location: local, modifierFlags: flags, timestamp: 1, windowNumber: window.windowNumber, context: nil, eventNumber: step * 2 + 1, clickCount: 1, pressure: 1)!
+                let receiver = (view as? ObjectView)?.item.id ?? "\(type(of: hit))"
+                (view ?? hit).mouseDown(with: down); (view ?? hit).mouseUp(with: up)
+                print("\(step == 0 ? "click" : "shift-click") \(id): received by \(receiver); selection now \(canvas.selection.map(\.id))")
+            }
+        } catch { fputs("\(error)\n", stderr) }
+    }
+    /// `--drive deck.pptx slide id id id`: the real app window and delegate, with real mouse events sent through the window.
+    static func drive(arguments: [String]) {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.regular)
+        let delegate = AppDelegate(); app.delegate = delegate
+        delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        delegate.openURL(URL(fileURLWithPath: arguments[0]))
+        let deadline = Date().addingTimeInterval(10)
+        while delegate.presentation == nil, Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
+        guard let presentation = delegate.presentation else { print("deck did not open"); return }
+        let slideIndex = Int(arguments[1])! - 1
+        delegate.table.selectRowIndexes(IndexSet(integer: slideIndex), byExtendingSelection: false)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+        let slide = presentation.slides[slideIndex]
+        for (step, id) in arguments.dropFirst(2).enumerated() {
+            guard let item = slide.items.first(where: { $0.id == id }) else { print("no object \(id)"); continue }
+            let local = delegate.canvas.surface.convert(CGPoint(x: item.frame.midX, y: item.frame.midY), to: nil)
+            let flags: NSEvent.ModifierFlags = step == 0 ? [] : [.shift]
+            let number = delegate.window.windowNumber
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: local, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: number, context: nil, eventNumber: step * 2, clickCount: 1, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: local, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: number, context: nil, eventNumber: step * 2 + 1, clickCount: 1, pressure: 1)!
+            let probe = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(local, from: nil))
+            var chain: [String] = []; var walk: NSView? = probe
+            while let view = walk { chain.append(String(describing: type(of: view))); walk = view.superview }
+            print("  point \(local) frame \(delegate.window.frame) hit chain: \(chain.joined(separator: " < "))")
+            var target: NSView? = probe
+            while let current = target, !(current is ObjectView) { target = current.superview }
+            (target ?? probe)?.mouseDown(with: down); (target ?? probe)?.mouseUp(with: up)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))   // let autosave and refreshes happen like in real use
+            if step == arguments.count - 3, ProcessInfo.processInfo.environment["GROUP_FIRST"] != nil {   // group them, then try again
+                delegate.toggleFadeGroup(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+                print("  grouped: \(slide.fadeGroups.map { $0.map(\.id) })")
+            }
+            if step == arguments.count - 3, ProcessInfo.processInfo.environment["DRAG"] != nil {   // drag the selected objects together
+                let ids = delegate.canvas.selection.map(\.id)
+                let before = delegate.canvas.selection.map(\.frame)
+                let from = delegate.canvas.surface.convert(CGPoint(x: item.frame.midX, y: item.frame.midY), to: nil)
+                let to = CGPoint(x: from.x + 30, y: from.y - 12)
+                let n = delegate.window.windowNumber
+                func event(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent { NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 99, clickCount: 1, pressure: 1)! }
+                guard let hit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(from, from: nil)) else { continue }
+                var view: NSView? = hit; while let current = view, !(current is ObjectView) { view = current.superview }
+                (view as? ObjectView)?.mouseDown(with: event(.leftMouseDown, from)); (view as? ObjectView)?.mouseDragged(with: event(.leftMouseDragged, to)); (view as? ObjectView)?.mouseUp(with: event(.leftMouseUp, to))
+                let after = delegate.canvas.selection.map(\.frame)
+                print("  dragged \(ids): moved by \(zip(before, after).map { String(format: "(%.0f,%.0f)", $1.minX - $0.minX, $1.minY - $0.minY) }), selection still \(delegate.canvas.selection.map(\.id))")
+            }
+            print("\(step == 0 ? "click" : "shift-click") \(id): selection now \(delegate.canvas.selection.map(\.id)) (slide \(delegate.index + 1))")
+        }
+    }
+    /// `--overflow deck.pptx`: text whose drawn height is larger than its frame (clicks on the extra lines miss the object).
+    static func overflow(path: String) {
+        _ = NSApplication.shared
+        guard let document = try? Presentation(url: URL(fileURLWithPath: path)) else { return }
+        var count = 0
+        for (index, slide) in document.slides.enumerated() {
+            for item in slide.items where item.canMove && item.textBody != nil && !item.text.isEmpty {
+                let layouts = layoutParagraphs(item)
+                guard let last = layouts.last else { continue }
+                let drawn = last.origin.y + last.height
+                if drawn > item.frame.height + 1 { count += 1; print(String(format: "slide %d id=%@ frame h%.0f, text needs %.0f (+%.0f): %@", index + 1, item.id, item.frame.height, drawn, drawn - item.frame.height, String(item.text.prefix(30)))) }
+            }
+        }
+        print("\(count) text objects draw below their frame")
+    }
     static func run() {
         do {
             let arguments = CommandLine.arguments

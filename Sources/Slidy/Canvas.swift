@@ -42,6 +42,8 @@ final class CanvasView: NSView {
     var step = 0
     private var dragOrigin: CGPoint?
     private var dragItem: SlideItem?
+    private var dragFrames: [ObjectIdentifier: CGRect] = [:]
+    private var pendingCollapse: SlideItem?
     private var originalFrame = CGRect.zero
     private var resizeCorner: CGPoint?
     private var marqueeStart: CGPoint?
@@ -154,7 +156,10 @@ final class CanvasView: NSView {
             let width = grouped ? diameter * 1.9 : diameter
             for item in group {
                 let badge = OrderBadgeView(number: number + 1, grouped: grouped)
-                badge.frame = CGRect(x: item.frame.maxX + diameter * 0.5 - width, y: item.frame.minY - diameter * 0.5, width: width, height: diameter)
+                var frame = CGRect(x: item.frame.maxX + diameter * 0.5 - width, y: item.frame.minY - diameter * 0.5, width: width, height: diameter)
+                // Badges of objects that start at nearly the same corner would pile up: slide each one left of the others.
+                while badgeViews.contains(where: { $0.frame.insetBy(dx: -1, dy: -1).intersects(frame) }) { frame.origin.x -= width + 2 }
+                badge.frame = frame
                 surface.addSubview(badge); badgeViews.append(badge)
             }
         }
@@ -173,7 +178,7 @@ final class CanvasView: NSView {
                     path.addRect(CGRect(x: corner.x - radius, y: corner.y - radius, width: 2 * radius, height: 2 * radius))
                 }
             }
-            selectionLayer.path = path; selectionLayer.lineWidth = 1 / scale
+            selectionLayer.path = path; selectionLayer.lineWidth = (selection.count > 1 ? 2 : 1) / scale
         } else { selectionLayer.path = nil }
         CATransaction.commit()
     }
@@ -229,11 +234,16 @@ final class CanvasView: NSView {
             if let current = selected, let position = order.firstIndex(where: { $0 === current }) { target = order[(position + 1) % order.count] }
             else if order.count > 1 { target = order[1] }
         }
-        selected = target
-        if event.clickCount == 2 && target.textBody != nil { startEditing(); return }
+        // A plain click on one of several selected objects keeps the selection so they can be dragged together;
+        // releasing without a drag then narrows the selection to the clicked object.
+        let keepsMultiSelection = selection.count > 1 && selection.contains { $0 === target } && !event.modifierFlags.contains(.option)
+        if !keepsMultiSelection { selected = target }
+        pendingCollapse = keepsMultiSelection ? target : nil
+        if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(); return }
         guard target.canMove else { return }
         dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
-        resizeCorner = resizeHandle(at: point, for: target)
+        dragFrames = keepsMultiSelection ? Dictionary(uniqueKeysWithValues: selection.filter(\.canMove).map { (ObjectIdentifier($0), $0.frame) }) : [:]
+        resizeCorner = keepsMultiSelection ? nil : resizeHandle(at: point, for: target)
     }
     func objectMouseDragged(_ view: ObjectView, event: NSEvent) {
         if marqueeStart != nil { updateMarquee(event); return }
@@ -242,6 +252,15 @@ final class CanvasView: NSView {
         let dx = point.x - start.x, dy = point.y - start.y
         guard abs(dx) + abs(dy) > 0.5 else { return }
         if !editedDrag { onWillEdit?(); editedDrag = true }
+        if !dragFrames.isEmpty {   // several selected objects move together
+            for moved in selection where moved.canMove {
+                guard var frame = dragFrames[ObjectIdentifier(moved)] else { continue }
+                frame.origin.x += dx; frame.origin.y += dy
+                moved.updateFrame(frame); objectViews.first { $0.item === moved }?.frame = frame
+            }
+            updateSelection(); updateOrderBadges()
+            return
+        }
         var frame = originalFrame
         if let corner = resizeCorner {
             if item.imageURL != nil {
@@ -263,6 +282,8 @@ final class CanvasView: NSView {
     }
     func objectMouseUp(_ view: ObjectView, event: NSEvent) {
         endMarquee()
+        if !editedDrag, let clicked = pendingCollapse { selected = clicked }
+        pendingCollapse = nil; dragFrames = [:]
         dragOrigin = nil
         if editedDrag { editedDrag = false; rebuild(); onChanged?() }
     }
