@@ -690,6 +690,8 @@ enum Verification {
             liveCanvas.display(reloaded.slides[2], in: reloaded); liveCanvas.layoutSubtreeIfNeeded()
             liveCanvas.selected = bodyBox; liveCanvas.startEditing()
             if let liveEditor = liveCanvas.editor {
+                guard !liveEditor.drawsBackground else { throw AppError.message("The text editor must be transparent") }
+                guard let editedView = liveCanvas.objectViews.first(where: { $0.item === bodyBox }), !editedView.isHidden, editedView.paragraphViews.allSatisfy(\.isHidden) else { throw AppError.message("While editing, the object keeps its fill and hides only its text") }
                 let startHeight = liveEditor.frame.height
                 liveEditor.setSelectedRange(NSRange(location: liveEditor.string.count, length: 0))
                 guard let caretStart = liveCanvas.caretRect, liveEditor.insertionPointColor == .clear else { throw AppError.message("Slidy caret is not shown while editing") }

@@ -463,6 +463,7 @@ final class CanvasView: NSView {
         }
         view.textStorage?.setAttributedString(content)
         view.typingAttributes = firstAttributes
+        view.drawsBackground = false
         view.backgroundColor = editorBackground
         view.insertionPointColor = (firstAttributes[.foregroundColor] as? NSColor) ?? fallbackColor
         let top = layoutParagraphs(item, night: night).first?.origin.y ?? item.insets.top
@@ -556,7 +557,9 @@ final class CanvasView: NSView {
         surface.addSubview(view); editor = view
         startCaret(for: view)
         updateOrderBadges()   // keep the order badges above the editor
-        objectViews.first { $0.item === item }?.isHidden = true
+        // The editor is transparent: the object keeps drawing its own fill and outline, only its (replaced) text is hidden,
+        // so nothing underneath the box is ever covered.
+        objectViews.first { $0.item === item }?.paragraphViews.forEach { $0.isHidden = true }
         updateSelection(); window?.makeFirstResponder(view)
         if !selectContents, let point {
             let inEditor = surface.convert(point, to: view)
