@@ -22,7 +22,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - One click (wand button, top right) applies Fade, top to bottom, to the slides that have no effect yet and leaves the slides you animated by hand alone. ⌘Z undoes it.
 - Presentation mode with the same fade steps (Play button or ⌘F). The slide number shows small at the bottom left; press delete (⌫) to go back to the previous slide, shown complete. ⌘↓ / ⌘↑ jump to the next / previous slide, also shown complete.
 - Pure black editing UI and a display-only night mode (⌘L) that never changes the file.
-- Press ⌘/ for the full list of keyboard shortcuts.
+- Press ⌘/ for the keyboard shortcuts that are special to Slidy.
 
 ## Build
 

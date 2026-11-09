@@ -8,22 +8,12 @@ enum Shortcuts {
             ("T · H", "Add a text box · a heading"),
             ("F", "Toggle Fade (⌘A then F clears a slide)"),
             ("⇧↑ / ⇧↓", "Move the Fade earlier / later (⌥⌘↑/↓ also work)"),
-            ("⌘G", "Group / ungroup the Fade of the selected objects"),
             ("⌥-click", "Select the object underneath (repeat to go deeper)"),
-            ("Drag · handle", "Move · resize with snapping guides (hold ⌘ for none)"),
-            ("Double-click", "On a picture: crop. Drag the handles, Return applies, Esc cancels"),
             ("Wand button", "Fade for slides that have no effect yet (top right)")
-        ]),
-        ("Text", [
-            ("- + Space", "Start a bullet list"),
-            ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)")
         ]),
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide while editing"),
-            ("Return", "Slide list focused: add a slide after the selected one"),
-            ("Delete", "Slide list focused: delete the selected slide"),
             ("⌘↑ / ⌘↓", "Slide list focused: move the selected slide up / down"),
-            ("Drag a slide", "Reorder slides in the left column"),
             ("⌘E", "Recent files: click opens, double-click renames (⌘E or Esc goes back)")
         ]),
         ("View", [

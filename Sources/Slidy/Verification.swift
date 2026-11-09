@@ -1030,8 +1030,12 @@ enum Verification {
             guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
             // The ⌘/ list is complete and short.
             let shortcutText = Shortcuts.sections.flatMap { $0.items }.map { "\($0.keys) \($0.action)" }
-            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘G", "⌘B", "⌘L", "⌘0", "⌘E", "⌘F · ⌘Enter", "Return", "Delete", "1 + Space", "T · H", "Double-click", "⌥-click", "Wand button"] {
+            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘B", "⌘L", "⌘0", "⌘E", "⌘F · ⌘Enter", "T · H", "⌥-click", "Wand button"] {
                 guard shortcutText.contains(where: { $0.contains(required) }) else { throw AppError.message("Shortcut list is missing \(required)") }
+            }
+            // Features that still work but are deliberately not listed.
+            for hidden in ["⌘G", "Drag", "Double-click", "Space", "Return", "Delete"] {
+                guard !shortcutText.contains(where: { $0.hasPrefix(hidden) }) else { throw AppError.message("The shortcut list should leave out \(hidden)") }
             }
             // Only Slidy's own shortcuts: the ones every Mac app has stay out, so the sheet is short.
             for common in ["⌘C", "⌘Z", "⌘S", "⌘O", "⌘Q", "⌘X", "⌘V"] {
