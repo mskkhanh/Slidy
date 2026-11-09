@@ -231,6 +231,7 @@ final class Presentation {
         let props = body.child("bodyPr")
         item.insets = NSEdgeInsets(top: (props?.number("tIns", 45720) ?? 45720) / emu, left: (props?.number("lIns", 91440) ?? 91440) / emu, bottom: (props?.number("bIns", 45720) ?? 45720) / emu, right: (props?.number("rIns", 91440) ?? 91440) / emu)
         item.anchor = props?.attr("anchor") ?? "t"
+        item.autoFit = props?.child("spAutoFit") != nil
         var autoNumber = 0
         item.paragraphs = body.all("p").enumerated().map { index, p in
             let level = Int(p.child("pPr")?.number("lvl") ?? 0) + 1

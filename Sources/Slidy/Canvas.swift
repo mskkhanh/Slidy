@@ -436,10 +436,24 @@ final class CanvasView: NSView {
         view.isVerticallyResizable = true; view.maxSize = CGSize(width: item.frame.width, height: 100000)
         return view
     }
+    /// While typing in an auto-fit box the editor grows and shrinks with its text (width up to the margin, then more lines).
+    private func fitEditor() {
+        guard let editor, let item = selected, item.autoFit, let presentation, let storage = editor.textStorage,
+              let container = editor.textContainer, let manager = editor.layoutManager else { return }
+        let maxWidth = max(80, presentation.size.width - item.frame.minX - presentation.textLeftMargin)
+        let natural = storage.boundingRect(with: CGSize(width: 100000, height: 1000), options: [.usesLineFragmentOrigin]).width
+        let width = min(maxWidth, max(60, ceil(natural) + item.insets.left + item.insets.right + 2))
+        container.containerSize = CGSize(width: max(1, width - item.insets.left - item.insets.right), height: 100000)
+        editor.maxSize = CGSize(width: maxWidth, height: 100000)
+        manager.ensureLayout(for: container)
+        let used = manager.usedRect(for: container).height + editor.textContainerInset.height + item.insets.bottom
+        editor.setFrameSize(NSSize(width: width, height: max(24, ceil(used))))
+    }
     func startEditing(selectContents: Bool = false) {
         guard let item = selected, item.textBody != nil, editor == nil else { return }
         let view = makeEditor(for: item)
         view.finish = { [weak self] commit in self?.finishEditing(commit: commit) }
+        if item.autoFit { view.onTextChange = { [weak self] in self?.fitEditor() } }
         surface.addSubview(view); editor = view
         updateOrderBadges()   // keep the order badges above the editor
         objectViews.first { $0.item === item }?.isHidden = true

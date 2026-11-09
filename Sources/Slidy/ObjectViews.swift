@@ -58,6 +58,7 @@ final class SlideSurface: NSView {
 }
 final class InlineTextView: NSTextView {
     var finish: ((Bool) -> Void)?
+    var onTextChange: (() -> Void)?
     private var renumbering = false
 
     /// A paragraph that is a list item starts with its marker and a tab: "•<tab>" or "2.<tab>".
@@ -106,7 +107,7 @@ final class InlineTextView: NSTextView {
         for (range, text) in edits where range.location < selection.location { shift += text.count - range.length }
         setSelectedRange(NSRange(location: max(0, selection.location + shift), length: selection.length))
     }
-    override func didChangeText() { super.didChangeText(); renumber() }
+    override func didChangeText() { super.didChangeText(); renumber(); onTextChange?() }
 
     override func keyDown(with event: NSEvent) {
         let prefix = (string as NSString).substring(with: linePrefixRange)

@@ -77,6 +77,35 @@ extension Presentation {
             body.addChild(p)
         }
         configureText(item)
+        fitFrame(item)
+    }
+    /// Makes the box of an auto-fit text object hug its text: as wide as the longest line (up to the right margin)
+    /// and as tall as its lines. Other boxes are left exactly as they are.
+    func fitFrame(_ item: SlideItem) {
+        guard item.autoFit, item.textBody != nil else { return }
+        let maxWidth = max(80, size.width - item.frame.minX - textLeftMargin)
+        var natural: CGFloat = 0
+        for paragraph in item.paragraphs {
+            let line = paragraph.text.boundingRect(with: CGSize(width: 100000, height: 1000), options: [.usesLineFragmentOrigin]).width
+            natural = max(natural, line + paragraph.left + (paragraph.bullet != nil ? 24 : 0))
+        }
+        var frame = item.frame
+        frame.size.width = min(maxWidth, max(60, ceil(natural) + item.insets.left + item.insets.right + 2))
+        item.frame = frame
+        let anchor = item.anchor; item.anchor = "t"   // measure from the top, whatever the stored anchor
+        let layouts = layoutParagraphs(item)
+        item.anchor = anchor
+        let used = (layouts.last.map { $0.origin.y + $0.height } ?? item.insets.top) + item.insets.bottom
+        frame.size.height = max(24, ceil(used))
+        item.updateFrame(frame)
+    }
+    /// Switches a text object to auto-fit and sizes it to its text.
+    func enableAutoFit(_ item: SlideItem) {
+        guard let bodyPr = item.textBody?.child("bodyPr") else { return }
+        for name in ["normAutofit", "noAutofit", "spAutoFit"] { bodyPr.child(name)?.detach() }
+        bodyPr.addChild(fragment("<a:spAutoFit/>"))
+        item.autoFit = true
+        fitFrame(item)
     }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)

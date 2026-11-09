@@ -31,6 +31,8 @@ final class SlideItem {
     var paragraphs: [Paragraph] = []
     var insets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
     var anchor = "t"
+    /// <a:spAutoFit/>: the box height (and, while typing, its width up to the right margin) follows the text.
+    var autoFit = false
     var imageURL: URL?
     var imageCrop = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
     var isTableCell = false

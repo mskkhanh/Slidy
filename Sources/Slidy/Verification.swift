@@ -548,7 +548,7 @@ enum Verification {
             func look(_ item: SlideItem) -> String {
                 let font = item.paragraphs.first?.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
                 let colour = (item.paragraphs.first?.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor)?.hex ?? "-"
-                return "\(font?.fontName ?? "-") \(font?.pointSize ?? 0) \(colour) \(item.frame.integral)"
+                return "\(font?.fontName ?? "-") \(font?.pointSize ?? 0) \(colour) \(Int(item.frame.minX.rounded())),\(Int(item.frame.minY.rounded()))"
             }
             for newItem in reloaded.slides[2].items {
                 guard let source = reference.items.first(where: { $0.id == newItem.id }), look(newItem) == look(source) else { throw AppError.message("New slide item \(newItem.id) does not look like the deck's: \(look(newItem))") }
@@ -564,6 +564,29 @@ enum Verification {
             guard types.contains("PartName=\"/\(created.path)\""), (try String(contentsOf: reloaded.folder.appendingPathComponent("ppt/presentation.xml"), encoding: .utf8)).components(separatedBy: "<p:sldId ").count - 1 == existingStructure.count + 1 else { throw AppError.message("New slide is not registered correctly") }
             let slideRels = try String(contentsOf: reloaded.folder.appendingPathComponent("ppt/slides/_rels/" + (created.path as NSString).lastPathComponent + ".rels"), encoding: .utf8)
             guard slideRels.contains("slideLayout") else { throw AppError.message("New slide has no layout") }
+            // The heading and body boxes hug their text, grow with more lines, shrink back, and survive saving as spAutoFit.
+            guard reloaded.slides[2].items.allSatisfy(\.autoFit) else { throw AppError.message("New slide boxes are not auto-fit after saving") }
+            guard let bodyBox = reloaded.slides[2].items.first(where: { $0.text == "Nội dung" }), let headBox = reloaded.slides[2].items.first(where: { $0.text == "Tiêu đề" }) else { throw AppError.message("New slide boxes missing") }
+            guard bodyBox.frame.height < 60, headBox.frame.height < 120, bodyBox.frame.width < 400, headBox.frame.width < 400,
+                  bodyBox.frame.height < (reference.items.first { $0.id == bodyBox.id }?.frame.height ?? 1000) else { throw AppError.message("New slide boxes are not snug: body \(bodyBox.frame), heading \(headBox.frame)") }
+            let oneLine = bodyBox.frame.height
+            reloaded.updateText(bodyBox, text: "Một\nHai\nBa")
+            guard bodyBox.frame.height > oneLine * 2.2 else { throw AppError.message("Box did not grow with more lines: \(oneLine) -> \(bodyBox.frame.height)") }
+            reloaded.updateText(bodyBox, text: String(repeating: "chữ dài ", count: 60))
+            guard bodyBox.frame.width <= reloaded.size.width - bodyBox.frame.minX, bodyBox.frame.height > oneLine * 3 else { throw AppError.message("Long text should wrap within the margin: \(bodyBox.frame)") }
+            reloaded.updateText(bodyBox, text: "Nội dung")
+            guard abs(bodyBox.frame.height - oneLine) < 1.5 else { throw AppError.message("Box did not shrink back: \(bodyBox.frame.height) vs \(oneLine)") }
+            // Live: the editor of an auto-fit box grows while lines are typed.
+            let liveCanvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
+            liveCanvas.display(reloaded.slides[2], in: reloaded); liveCanvas.layoutSubtreeIfNeeded()
+            liveCanvas.selected = bodyBox; liveCanvas.startEditing()
+            if let liveEditor = liveCanvas.editor {
+                let startHeight = liveEditor.frame.height
+                liveEditor.setSelectedRange(NSRange(location: liveEditor.string.count, length: 0))
+                for _ in 0..<2 { liveEditor.insertText("\nDòng mới", replacementRange: liveEditor.selectedRange()) }
+                guard liveEditor.frame.height > startHeight * 2 else { throw AppError.message("Editor did not grow while typing: \(startHeight) -> \(liveEditor.frame.height)") }
+                liveCanvas.finishEditing(commit: false)
+            } else { throw AppError.message("Could not start editing the new body box") }
             try withNew.removeInsertedSlide(at: 2)
             try withNew.saveInPlace()
             let afterRemoval = try Presentation(url: newURL)
