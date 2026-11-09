@@ -148,6 +148,50 @@ enum Verification {
             print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
             return
         }
+        if let badgeID = ProcessInfo.processInfo.environment["BADGE"] {   // the Fade number follows its object while it is dragged and resized
+            let slide = presentation.slides[slideIndex]
+            guard let item = slide.items.first(where: { $0.id == badgeID && $0.hasFade }) else { print("  object \(badgeID) has no Fade on this slide"); return }
+            delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            delegate.canvas.select([item])
+            let scale = delegate.canvas.surface.frame.width / max(1, delegate.canvas.surface.bounds.width)
+            let n = delegate.window.windowNumber
+            func mouse(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent { NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 8, clickCount: 1, pressure: 1)! }
+            func badgeNearCorner() -> CGRect? {   // the badge sits just above the object's top edge, near its right end
+                delegate.canvas.badgeFrames.min { hypot($0.maxX - item.frame.maxX, $0.midY - item.frame.minY) < hypot($1.maxX - item.frame.maxX, $1.midY - item.frame.minY) }
+            }
+            func handleRect(_ r: CGRect, scale: CGFloat) -> [CGRect] {   // where resize handles are, with their grab area
+                let reach = 14 / scale
+                return [CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.maxY)].map { CGRect(x: $0.x - reach, y: $0.y - reach, width: reach * 2, height: reach * 2) }
+            }
+            let badgeBefore = badgeNearCorner(), frameBefore = item.frame
+            if let badge = badgeBefore {
+                let clear = !handleRect(item.frame, scale: scale).contains { $0.intersects(badge) }
+                print("  badge clear of every resize handle and its grab area: \(clear) (badge \(Int(badge.minX)),\(Int(badge.minY)) \(Int(badge.width))x\(Int(badge.height)); object top \(Int(item.frame.minY)))")
+            }
+            let from = delegate.canvas.surface.convert(CGPoint(x: item.frame.midX, y: item.frame.midY), to: nil)
+            let to = CGPoint(x: from.x + 50 * scale, y: from.y - 35 * scale)
+            guard let hit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(from, from: nil)) else { return }
+            hit.mouseDown(with: mouse(.leftMouseDown, from)); hit.mouseDragged(with: mouse(.leftMouseDragged, to))   // still dragging: no mouse-up yet
+            let badgeDuring = badgeNearCorner()
+            let moved = (item.frame.minX - frameBefore.minX, item.frame.minY - frameBefore.minY)
+            let badgeMoved = ((badgeDuring?.minX ?? 0) - (badgeBefore?.minX ?? 0), (badgeDuring?.minY ?? 0) - (badgeBefore?.minY ?? 0))
+            print("  while dragging: object moved by (\(Int(moved.0)),\(Int(moved.1))), its badge moved by (\(Int(badgeMoved.0)),\(Int(badgeMoved.1)))")
+            hit.mouseUp(with: mouse(.leftMouseUp, to))
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            // Resize from the lower-right handle.
+            let handle = delegate.canvas.surface.convert(CGPoint(x: min(item.frame.maxX, delegate.presentation!.size.width) - 1, y: item.frame.maxY - 1), to: nil)
+            let handleTo = CGPoint(x: handle.x + 60 * scale, y: handle.y)
+            let beforeResize = badgeNearCorner(), widthBefore = item.frame.width
+            print("  selection \(delegate.canvas.selection.count), handle press at slide point (\(Int(item.frame.maxX)),\(Int(item.frame.maxY)))")
+            if let handleHit = delegate.window.contentView!.hitTest(delegate.window.contentView!.convert(handle, from: nil)) {
+                print("  press lands on \(type(of: handleHit)) \((handleHit as? ObjectView)?.item.id ?? "")")
+                handleHit.mouseDown(with: mouse(.leftMouseDown, handle)); handleHit.mouseDragged(with: mouse(.leftMouseDragged, handleTo))
+                let duringResize = badgeNearCorner()
+                print("  while resizing: width \(Int(widthBefore)) -> \(Int(item.frame.width)); badge right edge \(Int(beforeResize?.maxX ?? 0)) -> \(Int(duringResize?.maxX ?? 0)) (object right edge \(Int(item.frame.maxX)))")
+                handleHit.mouseUp(with: mouse(.leftMouseUp, handleTo))
+            }
+            return
+        }
         if ProcessInfo.processInfo.environment["WAND"] != nil {   // the wand button: only slides without effects get Fade
             let before = presentation.slides.map { $0.fadeGroups.map { $0.map(\.id) } }
             let plain = delegate.slidesWithoutEffects(in: presentation)

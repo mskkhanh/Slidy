@@ -106,6 +106,7 @@ final class CanvasView: NSView {
         needsLayout = true
     }
     var guideCount: Int { overlay.guides.count }
+    var badgeFrames: [CGRect] { badgeViews.map(\.frame) }
     func resetZoom() { zoom = 1; panOffset = .zero; needsLayout = true }
     override func layout() {
         super.layout()
@@ -203,8 +204,8 @@ final class CanvasView: NSView {
             if event.clickCount == 2 { onOpenFile?() }
         } else { backgroundClick(event) }
     }
-    override func mouseDragged(with event: NSEvent) { updateMarquee(event) }
-    override func mouseUp(with event: NSEvent) { endMarquee() }
+    override func mouseDragged(with event: NSEvent) { continueDrag(event) }   // also a resize that started on a handle outside the slide
+    override func mouseUp(with event: NSEvent) { finishDrag() }
     func updateOrderBadges() {
         badgeViews.forEach { $0.removeFromSuperview() }; badgeViews = []
         guard showsOrderBadges, !presenting, let slide else { return }
@@ -214,7 +215,8 @@ final class CanvasView: NSView {
             let width = grouped ? diameter * 1.9 : diameter
             for item in group {
                 let badge = OrderBadgeView(number: number + 1, grouped: grouped)
-                var frame = CGRect(x: item.frame.maxX + diameter * 0.5 - width, y: item.frame.minY - diameter * 0.5, width: width, height: diameter)
+                // Above the top edge and left of the top-right corner, so it never sits on a resize handle.
+                var frame = CGRect(x: item.frame.maxX - width - 16 / surfaceScale, y: item.frame.minY - diameter - 3 / surfaceScale, width: width, height: diameter)
                 // Badges of objects that start at nearly the same corner would pile up: slide each one left of the others.
                 while badgeViews.contains(where: { $0.frame.insetBy(dx: -1, dy: -1).intersects(frame) }) { frame.origin.x -= width + 2 }
                 badge.frame = frame
@@ -368,6 +370,7 @@ final class CanvasView: NSView {
             } else { overlay.guides = [] }
         }
         item.updateFrame(frame); host.frame = frame; updateSelection()
+        updateOrderBadges()   // the Fade number travels with the object while it is dragged or resized
     }
     /// Edges and centres that dragged or resized objects snap to: the other objects and the slide itself.
     private func snapTargets(excluding: Set<ObjectIdentifier>) -> [CGRect] {
