@@ -221,7 +221,14 @@ final class Presentation {
         item.fill = color(props?.child("solidFill")); item.stroke = color(props?.child("ln")?.child("solidFill"))
         item.strokeWidth = (props?.child("ln")?.number("w", 12700) ?? 0) / emu
         item.geometry = props?.child("prstGeom")?.attr("prst") ?? "rect"
+        if let adjust = props?.child("prstGeom")?.child("avLst")?.all("gd").first(where: { $0.attr("name") == "adj" }), let formula = adjust.attr("fmla"),
+           let value = Double(formula.replacingOccurrences(of: "val ", with: "")) { item.cornerRatio = CGFloat(value / 100000) }
         if let imageID = node.descendant("blip")?.attr("r:embed"), let path = rels[imageID] { item.imageURL = folder.appendingPathComponent(path) }
+        if let shadow = node.child("spPr")?.child("effectLst")?.child("outerShdw") {
+            let angle = shadow.number("dir") / 60000 * .pi / 180, distance = shadow.number("dist") / emu
+            item.shadow = ObjectShadow(blur: shadow.number("blurRad") / emu, dx: CGFloat(cos(angle) * distance), dy: CGFloat(sin(angle) * distance),
+                                       color: color(shadow) ?? NSColor(white: 0, alpha: 0.25))
+        }
         if let crop = node.descendant("srcRect") { item.imageCrop = NSEdgeInsets(top: crop.number("t") / 100000, left: crop.number("l") / 100000, bottom: crop.number("b") / 100000, right: crop.number("r") / 100000) }
         configureText(item, inherited: inherited)
         return item

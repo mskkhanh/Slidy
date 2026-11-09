@@ -6,6 +6,12 @@ import Foundation
 // Slide model: paragraphs, objects (SlideItem) and slides, parsed from and written back to the .pptx XML.
 let defaultFadeDuration = 0.1
 
+struct ObjectShadow {
+    var blur: CGFloat       // points
+    var dx: CGFloat         // offset to the right, points
+    var dy: CGFloat         // offset downwards, points
+    var color: NSColor      // includes the opacity as alpha
+}
 struct Paragraph {
     var text: NSAttributedString
     var bullet: String?
@@ -28,6 +34,8 @@ final class SlideItem {
     var stroke: NSColor?
     var strokeWidth: CGFloat = 0
     var geometry = "rect"
+    /// Corner radius of a rounded picture as a share of its shorter side (<a:gd name="adj"> / 100000).
+    var cornerRatio: CGFloat = 1.0 / 6
     var paragraphs: [Paragraph] = []
     var insets = NSEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
     var anchor = "t"
@@ -38,6 +46,8 @@ final class SlideItem {
     var isTableCell = false
     /// For table cells: the table's <p:graphicFrame> and its id. Cells are selected and deleted as one table.
     var tableNode: XMLElement?
+    /// Outer shadow (<a:outerShdw>) of a picture or shape, drawn under the object.
+    var shadow: ObjectShadow?
     var tableID: String?
     var inherited = false
     private static let fadeOffURI = "urn:slidepresent:fade-off"

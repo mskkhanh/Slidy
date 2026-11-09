@@ -183,6 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         #if DEBUG
         if CommandLine.arguments.contains("--verify") { Verification.run(); return }
         if let at = CommandLine.arguments.firstIndex(of: "--overflow"), CommandLine.arguments.count > at + 1 { Verification.overflow(path: CommandLine.arguments[at + 1]); return }
+        if let at = CommandLine.arguments.firstIndex(of: "--snap"), CommandLine.arguments.count > at + 2 { Verification.snap(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
         if let at = CommandLine.arguments.firstIndex(of: "--drive"), CommandLine.arguments.count > at + 3 { Verification.drive(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
         if let at = CommandLine.arguments.firstIndex(of: "--select"), CommandLine.arguments.count > at + 3 { Verification.select(arguments: Array(CommandLine.arguments[(at + 1)...])); return }
         if let at = CommandLine.arguments.firstIndex(of: "--hits"), CommandLine.arguments.count > at + 1 { Verification.hits(path: CommandLine.arguments[at + 1]); return }

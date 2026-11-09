@@ -471,6 +471,35 @@ enum Verification {
         }
         return names
     }
+    /// `--snap deck.pptx out.png`: renders slide 2 with a freshly inserted test picture, including layer shadows, to look at it.
+    static func snap(arguments: [String]) {
+        _ = NSApplication.shared
+        do {
+            let document = try Presentation(url: URL(fileURLWithPath: arguments[0]))
+            let url = URL(fileURLWithPath: arguments[1]).deletingPathExtension().appendingPathExtension("src.png")
+            let picture = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 400, pixelsHigh: 300, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: picture)
+            NSGradient(colors: [NSColor.systemTeal, NSColor.systemIndigo])!.draw(in: NSRect(x: 0, y: 0, width: 400, height: 300), angle: 45)
+            NSGraphicsContext.restoreGraphicsState()
+            try picture.representation(using: .png, properties: [:])!.write(to: url)
+            let slide = document.slides[1]
+            let item = try document.addImage(to: slide, url: url)
+            let canvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
+            let window = NSWindow(contentRect: canvas.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+            window.contentView = canvas
+            canvas.display(slide, in: document); canvas.layoutSubtreeIfNeeded()
+            canvas.displayIfNeeded()
+            guard let bitmap = canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds) else { return }
+            canvas.cacheDisplay(in: canvas.bounds, to: bitmap)
+            // Layer shadows are not part of cacheDisplay: composite the layer tree as well.
+            let context = NSGraphicsContext(bitmapImageRep: bitmap)!
+            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = context
+            canvas.layer?.render(in: context.cgContext)
+            NSGraphicsContext.restoreGraphicsState()
+            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[1]))
+            print("wrote \(arguments[1]); picture at \(item.frame.integral), corner ratio \(item.cornerRatio), shadow \(String(describing: item.shadow))")
+        } catch { fputs("\(error)\n", stderr) }
+    }
     static func run() {
         do {
             let arguments = CommandLine.arguments
@@ -844,6 +873,26 @@ enum Verification {
                 spaceDoc.setListSpacing(existing, on: false)
                 guard existing.paragraphs.map(\.after) == untouched else { throw AppError.message("Tightening did not restore the list") }
             }
+            // Inserted pictures get rounded corners and a light shadow: standard roundRect and outerShdw, read back, drawn on the layer.
+            let shadowDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
+            let pictureURL = output.appendingPathComponent("shadow-test.png")
+            let pictureBitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 80, pixelsHigh: 60, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            try pictureBitmap.representation(using: .png, properties: [:])!.write(to: pictureURL)
+            let insertedPicture = try shadowDoc.addImage(to: shadowDoc.slides[1], url: pictureURL)
+            guard let shadow = insertedPicture.shadow, shadow.blur > 5, shadow.dy > 2, shadow.dx == 0, shadow.color.alphaComponent > 0.1, shadow.color.alphaComponent < 0.4 else { throw AppError.message("Picture has no light shadow: \(String(describing: insertedPicture.shadow))") }
+            let shadowURL = output.appendingPathComponent("shadow.pptx")
+            try shadowDoc.save(to: shadowURL)
+            guard let savedPicture = try Presentation(url: shadowURL).slides[1].items.first(where: { $0.id == insertedPicture.id }), let saved = savedPicture.shadow,
+                  abs(saved.blur - shadow.blur) < 0.5, abs(saved.dy - shadow.dy) < 0.5 else { throw AppError.message("Shadow did not survive saving") }
+            let xmlText = shadowDoc.slides[1].document.xmlString
+            guard xmlText.contains("<a:outerShdw"), xmlText.contains("</a:prstGeom><a:effectLst>") else { throw AppError.message("Shadow is not written as a standard effect list") }
+            let shadowView = ObjectView(item: savedPicture, presentation: shadowDoc, canvas: nil)
+            guard let layer = shadowView.layer, layer.shadowOpacity > 0.1, layer.shadowRadius > 3, !layer.masksToBounds,
+                  (layer.isGeometryFlipped ? layer.shadowOffset.height > 0 : layer.shadowOffset.height < 0) else { throw AppError.message("Layer shadow is not set up (opacity \(shadowView.layer?.shadowOpacity ?? -1), offset \(String(describing: shadowView.layer?.shadowOffset)))") }
+            guard savedPicture.geometry == "roundRect", savedPicture.cornerRatio > 0.02, savedPicture.cornerRatio < 0.2,
+                  xmlText.contains("prst=\"roundRect\"") else { throw AppError.message("Picture corners are not rounded: \(savedPicture.geometry) \(savedPicture.cornerRatio)") }
+            print("  picture layer: geometry flipped \(shadowView.layer?.isGeometryFlipped ?? false), shadow offset \(String(describing: shadowView.layer?.shadowOffset)), radius \(shadowView.layer?.shadowRadius ?? 0), opacity \(shadowView.layer?.shadowOpacity ?? 0)")
+            guard shadowDoc.slides[0].items.filter({ $0.imageURL != nil }).allSatisfy({ $0.shadow == nil }) else { throw AppError.message("Existing pictures must not get a shadow") }
             // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
             let deleteURL = output.appendingPathComponent("delete.pptx")
             try? FileManager.default.removeItem(at: deleteURL)

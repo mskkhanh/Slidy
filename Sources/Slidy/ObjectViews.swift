@@ -18,11 +18,22 @@ final class ObjectView: NSView {
             paragraphViews.append(view); addSubview(view)
         }
         if item.rotation != 0 { frameCenterRotation = -item.rotation }
+        applyShadow()
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(item.text.isEmpty ? "Ảnh hoặc hình" : item.text)
     }
     required init?(coder: NSCoder) { fatalError() }
+    /// The object's own shadow lives on its layer, so it fades in and out together with the object when presenting.
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); applyShadow() }   // the layer's flip state is final once in a window
+    private func applyShadow() {
+        guard let shadow = item.shadow, let layer else { return }
+        layer.masksToBounds = false
+        layer.shadowColor = shadow.color.withAlphaComponent(1).cgColor
+        layer.shadowOpacity = Float(shadow.color.alphaComponent)
+        layer.shadowRadius = shadow.blur / 2
+        layer.shadowOffset = CGSize(width: shadow.dx, height: layer.isGeometryFlipped ? shadow.dy : -shadow.dy)   // +dy is downwards
+    }
     override func draw(_ dirtyRect: NSRect) {
         let path: NSBezierPath
         if item.geometry == "ellipse" { path = NSBezierPath(ovalIn: bounds) }
@@ -32,6 +43,11 @@ final class ObjectView: NSView {
         if let fill = item.fill { (night ? NightMode.surface(fill) : fill).setFill(); path.fill() }
         if let stroke = item.stroke { (night ? NightMode.ink(stroke) : stroke).setStroke(); path.lineWidth = item.strokeWidth; path.stroke() }
         if let image = presentation.image(for: item) {
+            // Rounded pictures are clipped to their rounded outline; the layer shadow then follows that shape.
+            if item.geometry == "roundRect" {
+                let radius = item.cornerRatio * min(bounds.width, bounds.height)
+                NSBezierPath(roundedRect: bounds, xRadius: radius, yRadius: radius).addClip()
+            }
             let crop = item.imageCrop
             let source = CGRect(x: image.size.width * crop.left, y: image.size.height * crop.bottom, width: image.size.width * max(0.01, 1 - crop.left - crop.right), height: image.size.height * max(0.01, 1 - crop.top - crop.bottom))
             image.draw(in: bounds, from: source, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: [.interpolation: NSImageInterpolation.high])

@@ -130,6 +130,13 @@ extension Presentation {
         configureText(item)
         fitFrame(item)
     }
+    /// A light, blurred shadow falling slightly downwards, written as a standard <a:outerShdw> so PowerPoint shows it too.
+    func setSoftShadow(_ item: SlideItem) {
+        guard let properties = item.node.child("spPr") else { return }
+        properties.child("effectLst")?.detach()
+        properties.addChild(fragment("<a:effectLst><a:outerShdw blurRad=\"190500\" dist=\"50800\" dir=\"5400000\" algn=\"t\" rotWithShape=\"0\"><a:srgbClr val=\"000000\"><a:alpha val=\"22000\"/></a:srgbClr></a:outerShdw></a:effectLst>"))
+        item.shadow = ObjectShadow(blur: 15, dx: 0, dy: 4, color: NSColor(white: 0, alpha: 0.22))
+    }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)
     }
@@ -176,7 +183,7 @@ extension Presentation {
             types.rootElement()!.addChild(entry); try types.xmlData.write(to: typesURL, options: .atomic)
         }
         let id = nextID(slide)
-        let node = fragment("<p:pic><p:nvPicPr><p:cNvPr id=\"\(id)\" name=\"Ảnh\"/><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed=\"\(rid)\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></p:spPr></p:pic>")
+        let node = fragment("<p:pic><p:nvPicPr><p:cNvPr id=\"\(id)\" name=\"Ảnh\"/><p:cNvPicPr><a:picLocks noChangeAspect=\"1\"/></p:cNvPicPr><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed=\"\(rid)\"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"roundRect\"><a:avLst><a:gd name=\"adj\" fmla=\"val 5000\"/></a:avLst></a:prstGeom></p:spPr></p:pic>")
         slide.tree.addChild(node)
         let item = SlideItem(node: node, id: id, frame: .zero)
         let maxWidth = size.width * (pasted ? 0.46 : 0.6)
@@ -185,6 +192,8 @@ extension Presentation {
         let dimensions = CGSize(width: sourceImage.size.width * ratio, height: sourceImage.size.height * ratio)
         item.updateFrame(CGRect(x: size.width * (pasted ? 0.75 : 0.5) - dimensions.width / 2, y: (size.height - dimensions.height) / 2, width: dimensions.width, height: dimensions.height))
         item.imageURL = media.appendingPathComponent(mediaName); item.order = (slide.items.map(\.order).max() ?? 0) + 1
+        item.geometry = "roundRect"; item.cornerRatio = 0.05   // soft rounded corners
+        setSoftShadow(item)   // and a light shadow under inserted pictures
         if pasted { item.enableFade(); slide.timingDirty = true }
         slide.items.append(item)
         return item
