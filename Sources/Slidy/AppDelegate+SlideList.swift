@@ -51,7 +51,7 @@ extension AppDelegate {
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
     private static let recentFont = NSFont.systemFont(ofSize: 12)
-    private static let recentLabelWidth: CGFloat = 112
+    private static let recentLabelWidth: CGFloat = 120
     /// Recent files sit close together; a long name takes a second line before it is truncated.
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if presentation != nil, !showingRecents { return 106 }
@@ -73,8 +73,10 @@ extension AppDelegate {
             icon.contentTintColor = NSColor(red: 0.50, green: 0.68, blue: 0.96, alpha: 1)
             let label = NSTextField(wrappingLabelWithString: entry.url.deletingPathExtension().lastPathComponent)
             label.font = Self.recentFont
+            // Word-wrap onto two lines; only the last visible line gets the "…". (A tail-truncating line break would
+            // squeeze the name onto a single line.)
             label.maximumNumberOfLines = 2
-            label.lineBreakMode = .byTruncatingTail
+            label.lineBreakMode = .byWordWrapping
             label.cell?.truncatesLastVisibleLine = true
             if !entry.exists { label.textColor = .tertiaryLabelColor; cell.toolTip = entry.path + "\nKhông tìm thấy file" }
             label.preferredMaxLayoutWidth = Self.recentLabelWidth

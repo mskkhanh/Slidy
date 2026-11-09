@@ -148,6 +148,22 @@ enum Verification {
             print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
             return
         }
+        if ProcessInfo.processInfo.environment["RECENTS"] != nil {   // a long file name in the recent files list takes two lines
+            let long = "/tmp/Buổi học miễn phí 1 2 (13 11) Lập kế hoạch ngày mai trong 5 phút.pptx"
+            let short = "/tmp/Ngắn.pptx"
+            delegate.recentPresentations = [RecentPresentation(path: long, slide: 0), RecentPresentation(path: short, slide: 0)]
+            delegate.toggleRecents(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            for row in 0..<2 {
+                let height = delegate.tableView(delegate.table, heightOfRow: row)
+                guard let cell = delegate.tableView(delegate.table, viewFor: nil, row: row) else { continue }
+                cell.frame = NSRect(x: 0, y: 0, width: 174, height: height); cell.layoutSubtreeIfNeeded()
+                let label = cell.subviews.compactMap { $0 as? NSTextField }.first
+                let lineHeight = (label?.font?.boundingRectForFont.height ?? 15)
+                print("  row \(row): row height \(height), label \(label?.frame.size ?? .zero), about \(Int(((label?.frame.height ?? 0) / lineHeight).rounded())) line(s), line break \(String(describing: label?.lineBreakMode)), max lines \(label?.maximumNumberOfLines ?? -1)")
+            }
+            delegate.recentPresentations = []
+            return
+        }
         if ProcessInfo.processInfo.environment["DRAGTABLE"] != nil {   // click a table cell and drag: the whole table moves; ⌘Z puts it back
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
