@@ -111,6 +111,17 @@ enum Verification {
         delegate.table.selectRowIndexes(IndexSet(integer: slideIndex), byExtendingSelection: false)
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+        if ProcessInfo.processInfo.environment["MOVESLIDE"] != nil {   // slide list focused: ⌘↑ moves the slide, ⌘Z moves it back
+            delegate.window.makeFirstResponder(delegate.table)
+            let paths = presentation.slides.map(\.path)
+            delegate.moveSlide(by: -1)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  moved slide \(slideIndex + 1) up: now at \(delegate.index + 1), order changed: \(presentation.slides.map(\.path) != paths), selected row \(delegate.table.selectedRow + 1), first responder is list: \(delegate.window.firstResponder === delegate.table)")
+            delegate.undo.undo()
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
+            return
+        }
         let slide = presentation.slides[slideIndex]
         for (step, id) in arguments.dropFirst(2).enumerated() {
             guard let item = slide.items.first(where: { $0.id == id }) else { print("no object \(id)"); continue }
@@ -421,6 +432,23 @@ enum Verification {
                     guard topCanvas.surface.subviews.last is SelectionOverlay else { throw AppError.message("Selection is not on top \(step)") }
                 }
             }
+            // Reordering slides: saved into presentation.xml, content and Fade untouched, and reversible.
+            let reorderURL = output.appendingPathComponent("reorder.pptx")
+            try? FileManager.default.removeItem(at: reorderURL)
+            try FileManager.default.copyItem(at: URL(fileURLWithPath: arguments[2]), to: reorderURL)
+            let reordered = try Presentation(url: reorderURL)
+            let originalPaths = reordered.slides.map(\.path)
+            let structure: (Presentation) -> [[[String]]] = { $0.slides.map { $0.fadeGroups.map { $0.map(\.id) } } }
+            let beforeStructure = structure(reordered)
+            try reordered.moveSlide(from: 4, to: 1)
+            try reordered.saveInPlace()
+            let afterMove = try Presentation(url: reorderURL)
+            var expectedPaths = originalPaths; expectedPaths.insert(expectedPaths.remove(at: 4), at: 1)
+            var expectedStructure = beforeStructure; expectedStructure.insert(expectedStructure.remove(at: 4), at: 1)
+            guard afterMove.slides.map(\.path) == expectedPaths, structure(afterMove) == expectedStructure, afterMove.slides.count == originalPaths.count else { throw AppError.message("Slide reorder was not saved correctly") }
+            try afterMove.moveSlide(from: 1, to: 4)   // undo
+            try afterMove.saveInPlace()
+            guard try Presentation(url: reorderURL).slides.map(\.path) == originalPaths else { throw AppError.message("Slide reorder undo did not restore the order") }
             print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }

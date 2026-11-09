@@ -186,6 +186,10 @@ extension Presentation {
         guard allowOverwrite || destination.resolvingSymlinksInPath() != source.resolvingSymlinksInPath() else {
             throw AppError.message("Hãy chọn tên khác để lưu bản sao.")
         }
+        if orderDirty {
+            try (try part("ppt/presentation.xml")).xmlData.write(to: folder.appendingPathComponent("ppt/presentation.xml"), options: .atomic)
+            orderDirty = false
+        }
         for slide in slides {
             writeTiming(slide)
             let data = slide.document.xmlData

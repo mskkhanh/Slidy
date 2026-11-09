@@ -146,12 +146,28 @@ extension AppDelegate {
 }
 
 extension AppDelegate {
-    /// ⌘↓ / ⌘↑ while editing: go to the next / previous slide.
+    /// ⌘↓ / ⌘↑: with the slide list focused, moves the selected slide in the deck; otherwise goes to the next / previous slide.
     func moveSlide(by delta: Int) {
         guard let presentation, !busy, !showingRecents else { return }
         let next = index + delta
         guard presentation.slides.indices.contains(next) else { return }
+        if window.firstResponder === table { moveSlideInDeck(from: index, to: next); return }
         table.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
         table.scrollRowToVisible(next)
+    }
+    /// Reorders the deck (saved into presentation.xml by autosave) and keeps the moved slide selected. ⌘Z moves it back.
+    func moveSlideInDeck(from source: Int, to destination: Int) {
+        guard let presentation else { return }
+        canvas.finishEditing(commit: true)
+        do { try presentation.moveSlide(from: source, to: destination) } catch { showError(error); return }
+        undo.registerUndo(withTarget: self) { target in target.moveSlideInDeck(from: destination, to: source) }
+        undo.setActionName("Đổi thứ tự slide")
+        index = destination
+        thumbnailCache.removeAllObjects()
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(integer: destination), byExtendingSelection: false)
+        table.scrollRowToVisible(destination)
+        window.makeFirstResponder(table)
+        didChange()
     }
 }

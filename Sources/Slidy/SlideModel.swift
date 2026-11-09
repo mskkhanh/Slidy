@@ -75,6 +75,8 @@ final class SlideItem {
 }
 final class Slide {
     let path: String
+    /// This slide's <p:sldId> entry in presentation.xml; moving it there is how slides are reordered.
+    var listEntry: XMLElement?
     var document: XMLDocument
     var items: [SlideItem] = []
     var background = NSColor.white

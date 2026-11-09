@@ -9,6 +9,8 @@ final class Presentation {
     let source: URL
     /// Modification time of the file when it was opened or last saved by Slidy, to notice outside changes.
     var sourceStamp: Date?
+    /// Slide order changed since presentation.xml was last written into the work folder.
+    var orderDirty = false
     var slides: [Slide] = []
     var size = CGSize(width: 960, height: 540)
     lazy var textLeftMargin: CGFloat = {
@@ -59,6 +61,21 @@ final class Presentation {
         if let value = xmlCache[path] { return value }
         let value = try readXML(folder.appendingPathComponent(path)); xmlCache[path] = value; return value
     }
+    /// Moves a slide to a new position: the slide array and the <p:sldIdLst> in presentation.xml. Slide files
+    /// and everything inside a slide (Fade timing included) are untouched.
+    func moveSlide(from source: Int, to destination: Int) throws {
+        guard slides.indices.contains(source), slides.indices.contains(destination), source != destination else { return }
+        let list = try part("ppt/presentation.xml").rootElement()?.child("sldIdLst")
+        guard let list, slides.allSatisfy({ $0.listEntry != nil }) else { throw AppError.message("Không đổi được thứ tự slide trong file này.") }
+        if (try part("ppt/presentation.xml")).rootElement()?.descendant("sectionLst") != nil {
+            throw AppError.message("Bài trình chiếu có các Section, Slidy chưa hỗ trợ đổi thứ tự slide trong trường hợp này.")
+        }
+        let moved = slides.remove(at: source)
+        slides.insert(moved, at: destination)
+        slides.forEach { $0.listEntry?.detach() }
+        slides.forEach { if let entry = $0.listEntry { list.addChild(entry) } }
+        orderDirty = true
+    }
     func relationships(_ path: String) -> [String: String] {
         let url = folder.appendingPathComponent(path)
         let rel = url.deletingLastPathComponent().appendingPathComponent("_rels").appendingPathComponent(url.lastPathComponent + ".rels")
@@ -92,6 +109,7 @@ final class Presentation {
         for entry in slideList.elements {
             guard let path = rels[entry.attr("r:id") ?? ""] else { throw AppError.message("Thiếu liên kết slide trong file.") }
             let slide = Slide(path: path, document: try part(path))
+            slide.listEntry = entry
             try parse(slide)
             slides.append(slide)
         }
