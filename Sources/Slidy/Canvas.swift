@@ -48,21 +48,17 @@ final class CanvasView: NSView {
     private var resizeCorner: CGPoint?
     private var marqueeStart: CGPoint?
     private var marqueeBase: [SlideItem] = []
-    private let marqueeLayer = CAShapeLayer()
     private var surfaceScale: CGFloat { max(0.01, surface.frame.width / max(1, surface.bounds.width)) }
     private var editedDrag = false
-    private var selectionLayer = CAShapeLayer()
+    /// Selection outline, handles and marquee are drawn by one transparent view kept above every object.
+    private let overlay = SelectionOverlay()
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override init(frame: NSRect) {
         super.init(frame: frame); wantsLayer = true
         surface.wantsLayer = true; surface.canvas = self
         addSubview(surface)
-        selectionLayer.fillColor = nil; selectionLayer.strokeColor = NSColor.controlAccentColor.cgColor
-        surface.layer?.addSublayer(selectionLayer)
-        marqueeLayer.fillColor = NSColor.controlAccentColor.withAlphaComponent(0.15).cgColor
-        marqueeLayer.strokeColor = NSColor.controlAccentColor.cgColor
-        surface.layer?.addSublayer(marqueeLayer)
+        surface.addSubview(overlay)
     }
     required init?(coder: NSCoder) { fatalError() }
     override func draw(_ dirtyRect: NSRect) { NSColor.black.setFill(); bounds.fill() }
@@ -96,10 +92,7 @@ final class CanvasView: NSView {
         }
         updateOrderBadges()
         // The selection border must stay above object layers.
-        selectionLayer.removeFromSuperlayer()
-        surface.layer?.addSublayer(selectionLayer)
-        marqueeLayer.removeFromSuperlayer()
-        surface.layer?.addSublayer(marqueeLayer)
+        raiseOverlay()
         if presenting {
             let views = Dictionary(uniqueKeysWithValues: objectViews.map { (ObjectIdentifier($0.item), $0) })
             fadeSteps = slide.fadeSequence.map { step in
@@ -163,24 +156,26 @@ final class CanvasView: NSView {
                 surface.addSubview(badge); badgeViews.append(badge)
             }
         }
-        selectionLayer.removeFromSuperlayer(); surface.layer?.addSublayer(selectionLayer)
-        marqueeLayer.removeFromSuperlayer(); surface.layer?.addSublayer(marqueeLayer)
+        raiseOverlay()
+    }
+    /// Keeps the selection overlay above every object, badge and editor, whatever their stacking order.
+    private func raiseOverlay() {
+        overlay.frame = surface.bounds
+        surface.addSubview(overlay, positioned: .above, relativeTo: nil)
+        overlay.needsDisplay = true
     }
     func updateSelection() {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
+        let scale = surfaceScale
         if !selection.isEmpty, !presenting, editor == nil {
-            let scale = surfaceScale
-            let path = CGMutablePath()
-            for item in selection { path.addRect(item.frame) }
+            overlay.rects = selection.map(\.frame)
+            overlay.handles = []
             if let selected, selected.canMove {
                 let radius: CGFloat = (selected.imageURL == nil ? 4 : 6) / scale
-                for corner in resizeCorners(for: selected) {
-                    path.addRect(CGRect(x: corner.x - radius, y: corner.y - radius, width: 2 * radius, height: 2 * radius))
-                }
+                overlay.handles = resizeCorners(for: selected).map { CGRect(x: $0.x - radius, y: $0.y - radius, width: 2 * radius, height: 2 * radius) }
             }
-            selectionLayer.path = path; selectionLayer.lineWidth = (selection.count > 1 ? 2 : 1) / scale
-        } else { selectionLayer.path = nil }
-        CATransaction.commit()
+            overlay.lineWidth = (selection.count > 1 ? 2 : 1.5) / scale
+        } else { overlay.rects = []; overlay.handles = [] }
+        raiseOverlay()
     }
     func backgroundClick(_ event: NSEvent) {
         if presenting { advance(); return }
@@ -198,20 +193,13 @@ final class CanvasView: NSView {
                           width: abs(point.x - start.x), height: abs(point.y - start.y))
         let existing = Set(marqueeBase.map(ObjectIdentifier.init))
         select(slide.items.filter { $0.canMove && (existing.contains(ObjectIdentifier($0)) || area.contains($0.frame)) })
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        marqueeLayer.lineWidth = 1 / surfaceScale
-        marqueeLayer.path = CGPath(rect: area, transform: nil)
-        CATransaction.commit()
+        overlay.marquee = area; overlay.lineWidth = 1 / surfaceScale; overlay.needsDisplay = true
     }
     func endMarquee() {
         guard marqueeStart != nil else { return }
         marqueeStart = nil
         marqueeBase = []
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        marqueeLayer.path = nil
-        CATransaction.commit()
+        overlay.marquee = nil; overlay.needsDisplay = true
     }
     func objectMouseDown(_ view: ObjectView, event: NSEvent) {
         if presenting { advance(); return }

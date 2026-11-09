@@ -376,6 +376,18 @@ enum Verification {
                 groupSlide.normalizeFadeOrder()
                 guard groupSlide.fadeGroups.count == before, groupSlide.fadeGroups.map(\.count).allSatisfy({ $0 == 1 }) else { throw AppError.message("Ungrouping did not split the effects") }
             }
+            // The selection outline must stay above every object, badge and editor.
+            let topCanvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 960, height: 540)); topCanvas.showsOrderBadges = true
+            topCanvas.display(reopened.slides[3], in: reopened); topCanvas.layoutSubtreeIfNeeded()
+            if let anyItem = reopened.slides[3].items.first(where: { $0.canMove && $0.textBody != nil }) {
+                topCanvas.selected = anyItem
+                for step in ["selected", "after rebuild", "after badges", "while editing"] {
+                    if step == "after rebuild" { topCanvas.rebuild() }
+                    if step == "after badges" { topCanvas.updateOrderBadges() }
+                    if step == "while editing" { topCanvas.startEditing() }
+                    guard topCanvas.surface.subviews.last is SelectionOverlay else { throw AppError.message("Selection is not on top \(step)") }
+                }
+            }
             print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }

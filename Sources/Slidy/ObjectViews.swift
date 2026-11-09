@@ -119,3 +119,26 @@ final class SlideNumberLabel: NSTextField {
         textColor = NSColor(white: 0.5, alpha: 0.7)
     }
 }
+
+/// Transparent view above all objects: draws the selection outline, resize handles and the marquee.
+final class SelectionOverlay: NSView {
+    var rects: [CGRect] = []
+    var handles: [CGRect] = []
+    var marquee: CGRect?
+    var lineWidth: CGFloat = 1
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        let accent = NSColor.controlAccentColor
+        accent.setStroke()
+        for rect in rects { let path = NSBezierPath(rect: rect); path.lineWidth = lineWidth; path.stroke() }
+        for handle in handles {
+            NSColor.white.setFill(); NSBezierPath(rect: handle).fill()
+            let path = NSBezierPath(rect: handle); path.lineWidth = lineWidth; path.stroke()
+        }
+        if let marquee {
+            accent.withAlphaComponent(0.15).setFill(); NSBezierPath(rect: marquee).fill()
+            let path = NSBezierPath(rect: marquee); path.lineWidth = lineWidth; path.stroke()
+        }
+    }
+}
