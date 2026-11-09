@@ -5,26 +5,26 @@ enum Shortcuts {
     /// Only what is special to Slidy: the shortcuts every Mac app has (⌘C, ⌘Z, ⌘A, ⌘S, Delete, Esc...) are left out.
     static let sections: [(title: String, items: [(keys: String, action: String)])] = [
         ("Objects", [
-            ("T · H", "Add a text box · a heading"),
-            ("F", "Toggle Fade (⌘A then F clears a slide)"),
-            ("⇧↑ / ⇧↓", "Move the Fade earlier / later (⌥⌘↑/↓ also work)"),
-            ("⌥-click", "Select the object underneath (repeat to go deeper)"),
-            ("Wand button", "Fade for slides that have no effect yet (top right)")
+            ("T · H", "Add text · heading"),
+            ("F", "Toggle Fade"),
+            ("⇧↑ / ⇧↓", "Reorder Fade"),
+            ("⌥-click", "Select underneath"),
+            ("Wand button", "Auto Fade")
         ]),
         ("Slides", [
-            ("⌘↑ / ⌘↓", "Previous / next slide while editing"),
-            ("⌘↑ / ⌘↓", "Slide list focused: move the selected slide up / down"),
-            ("⌘E", "Recent files: click opens, double-click renames (⌘E or Esc goes back)")
+            ("⌘↑ / ⌘↓", "Previous / next slide"),
+            ("⌘↑ / ⌘↓", "Move slide (list)"),
+            ("⌘E", "Recent files")
         ]),
         ("View", [
-            ("⌘B", "Hide / show the left column"),
-            ("⌘0", "Fit the slide to the window"),
-            ("⌘L", "Night / light mode (display only)")
+            ("⌘B", "Hide sidebar"),
+            ("⌘0", "Fit slide"),
+            ("⌘L", "Night mode")
         ]),
         ("Presenting", [
-            ("⌘F · ⌘Enter", "Present from this slide (Play button, top right)"),
-            ("⌫ · ⌘↑", "Previous slide, shown complete"),
-            ("⌘↓", "Next slide, shown complete")
+            ("⌘F · ⌘Enter", "Present"),
+            ("⌫ · ⌘↑", "Previous slide"),
+            ("⌘↓", "Next slide")
         ])
     ]
 }

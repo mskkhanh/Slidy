@@ -1042,7 +1042,7 @@ enum Verification {
                 guard !shortcutText.contains(where: { $0.hasPrefix(common) }) else { throw AppError.message("The shortcut list should leave out the familiar \(common)") }
             }
             guard Shortcuts.sections.flatMap({ $0.items }).count <= 24 else { throw AppError.message("The shortcut list is too long") }
-            guard Shortcuts.sections.flatMap({ $0.items }).allSatisfy({ $0.action.count <= 90 }) else { throw AppError.message("A shortcut description is too long") }
+            guard Shortcuts.sections.flatMap({ $0.items }).allSatisfy({ $0.action.count <= 28 }) else { throw AppError.message("A shortcut description is too long") }
             // Inserted pictures get slightly rounded corners (standard roundRect) and no shadow.
             let shadowDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
             let pictureURL = output.appendingPathComponent("round-test.png")
