@@ -148,6 +148,30 @@ enum Verification {
             print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
             return
         }
+        if ProcessInfo.processInfo.environment["FADEKEY"] != nil {   // ⇧↑ / ⇧↓ reorder Fade; ⌘↑ / ⌘↓ do not; without Fade ⇧↓ nudges
+            let slide = presentation.slides[slideIndex]
+            delegate.applyFade(toTopToBottom: [slide])
+            delegate.window.makeFirstResponder(delegate.canvas)
+            let n = delegate.window.windowNumber
+            func key(_ code: UInt16, _ flags: NSEvent.ModifierFlags) { delegate.canvas.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!); RunLoop.current.run(until: Date().addingTimeInterval(0.2)) }
+            let order = { slide.fadeGroups.map { $0.map(\.id) } }
+            let start = order()
+            guard start.count >= 2, let second = slide.fadeGroups[1].first else { print("  need two effects"); return }
+            delegate.canvas.select([second])
+            key(126, .shift)
+            print("  ⇧↑ on the second effect: order \(start) -> \(order()), moved first: \(order().first == [second.id])")
+            key(125, .shift)
+            print("  ⇧↓ moves it back: \(order() == start)")
+            let before = order()
+            key(126, .command)   // ⌘↑ must not touch the Fade order
+            print("  ⌘↑ leaves the Fade order alone: \(order() == before)")
+            slide.removeFade(from: second); slide.timingDirty = true
+            delegate.canvas.select([second])
+            let y = second.frame.minY
+            key(126, .shift)
+            print("  without Fade, ⇧↑ nudges by 10: \(Int(y - second.frame.minY))")
+            return
+        }
         if let badgeID = ProcessInfo.processInfo.environment["BADGE"] {   // the Fade number follows its object while it is dragged and resized
             let slide = presentation.slides[slideIndex]
             guard let item = slide.items.first(where: { $0.id == badgeID && $0.hasFade }) else { print("  object \(badgeID) has no Fade on this slide"); return }

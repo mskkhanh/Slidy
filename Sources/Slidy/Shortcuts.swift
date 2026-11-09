@@ -24,7 +24,7 @@ enum Shortcuts {
             ("F", "Toggle Fade: remove it if every selected object has it (e.g. ⌘A then F clears the slide), otherwise add it"),
             ("wand button", "Top right: apply Fade, top to bottom, to slides that have no effect yet; slides you already animated are left alone (⌘Z undoes it)"),
             ("⌘G", "Group / ungroup the Fade of the selected objects: they play together and show one number with a link icon"),
-            ("⌥⌘↑ / ⌥⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges update)"),
+            ("⇧↑ / ⇧↓", "Move the selected objects' Fade effect earlier / later (the order badges update). Works when the selection has Fade; ⌥⌘↑ / ⌥⌘↓ do the same. ⌘↑ / ⌘↓ switch slides"),
         ]),
         ("Objects on the slide", [
             ("Click / ⇧-click", "Select an object / add or remove it from the selection (a marquee selects objects it fully encloses)"),

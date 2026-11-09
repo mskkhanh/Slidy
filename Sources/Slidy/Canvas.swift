@@ -658,8 +658,11 @@ final class CanvasView: NSView {
             }
             return
         }
-        if [125, 126].contains(event.keyCode),
-           event.modifierFlags.intersection([.command, .control, .option, .shift]) == [.command, .option] {
+        // Fade order: ⇧↑ / ⇧↓ (⌥⌘↑ / ⌥⌘↓ still work). ⌘↑ / ⌘↓ switch slides, so they are not used here.
+        // On objects without Fade, ⇧↑ / ⇧↓ keep nudging by 10 points.
+        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let hasFadeSelected = selection.contains { $0.canMove && $0.hasFade }
+        if [125, 126].contains(event.keyCode), flags == [.command, .option] || (flags == .shift && hasFadeSelected) {
             if !event.isARepeat { onReorderFade?(event.keyCode == 126 ? -1 : 1) }
             return
         }
