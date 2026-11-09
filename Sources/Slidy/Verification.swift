@@ -216,6 +216,11 @@ enum Verification {
             }
             return
         }
+        if ProcessInfo.processInfo.environment["MODIFIED"] != nil {   // opening a deck must not mark it as changed
+            RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+            print("  after opening: modified = \(delegate.modified), undo available = \(delegate.undo.canUndo)")
+            return
+        }
         if ProcessInfo.processInfo.environment["LINESPACE"] != nil {   // the Edit menu command on a selection, with undo
             let slide = presentation.slides[slideIndex]
             guard let item = slide.items.first(where: { $0.canMove && $0.textBody != nil && !$0.text.isEmpty }) else { return }

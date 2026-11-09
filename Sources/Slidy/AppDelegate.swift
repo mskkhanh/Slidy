@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let undo = UndoManager()
     var presentation: Presentation?
     var index = 0
-    var modified = false
+    var modified = false {
+        didSet { if modified && !oldValue, ProcessInfo.processInfo.environment["SLIDY_TRACE_MODIFIED"] != nil { fputs("MODIFIED set by:\n" + Thread.callStackSymbols.prefix(14).joined(separator: "\n") + "\n", stderr) } }
+    }
     var busy = false
     var openRequest = 0
     let windowFrameName = "SlideEditor"

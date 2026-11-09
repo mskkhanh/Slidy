@@ -13,7 +13,7 @@ cp -R Slidy.app "$APP"
 codesign --force --sign - "$APP" >/dev/null 2>&1
 cp "$DECK" "$WORK/smoke-deck.pptx"
 BEFORE="$(md5 -q "$WORK/smoke-deck.pptx")"
-open -n -a "$APP" "$WORK/smoke-deck.pptx"
+open -g -n -a "$APP" "$WORK/smoke-deck.pptx"   # -g: stay in the background so it never takes the keyboard from whoever is working
 sleep 4
 pgrep -f "Slidy Smoke.app" >/dev/null && echo "running" || echo "NOT running"
 osascript -e "tell application id \"$ID\" to quit" >/dev/null 2>&1 || true
