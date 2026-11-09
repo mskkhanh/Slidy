@@ -11,7 +11,7 @@ enum Shortcuts {
         ]),
         ("Edit", [
             ("⌘Z / ⇧⌘Z", "Undo / Redo"),
-            ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste (images too)"),
+            ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste. Select objects (or a table), ⌘C, go to another slide, ⌘V: they land in the same place with the same look; pasted on their own slide they shift a little. Images paste too"),
             ("⌘A", "Select all objects on the slide"),
             ("Delete", "With the slide list focused: delete the selected slide (no prompt; ⌘Z brings it back with its Fade). The last remaining slide cannot be deleted"),
             ("Return", "With the slide list focused: add a new slide after the selected one (heading and text box styled like your other slides; their boxes hug the text and grow or shrink as you type; ⌘Z removes it)"),

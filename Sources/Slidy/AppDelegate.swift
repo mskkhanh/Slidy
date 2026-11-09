@@ -14,6 +14,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     var showingRecents = false
     /// Left column (thumbnails / recent files) can be hidden with ⌘B; the choice is remembered.
+    /// Pasting the same copy again on the same slide shifts each paste a little.
+    var lastPasteKey = ""
+    var pasteRepeats = 0
     var sidebarHidden = UserDefaults.standard.bool(forKey: "sidebarHidden")
     var sidebarViews: [NSView] = []
     var canvasLeadingOpen: NSLayoutConstraint!

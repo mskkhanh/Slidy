@@ -122,6 +122,32 @@ enum Verification {
             print("  after undo: order restored: \(presentation.slides.map(\.path) == paths), slide at \(delegate.index + 1)")
             return
         }
+        if let route = ProcessInfo.processInfo.environment["PASTE"]?.split(separator: ":").compactMap({ Int($0) }), route.count == 2 {   // copy on one slide, paste on another
+            let source = presentation.slides[route[0] - 1], destination = presentation.slides[route[1] - 1]
+            delegate.table.selectRowIndexes(IndexSet(integer: route[0] - 1), byExtendingSelection: false); RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            let wanted = Set(arguments.dropFirst(2))
+            let chosen = wanted.contains("table") ? source.items.filter(\.isTableCell) : source.items.filter { wanted.contains($0.id) }
+            delegate.canvas.select(chosen)
+            delegate.window.makeFirstResponder(delegate.canvas)
+            delegate.canvas.copy(nil)
+            delegate.table.selectRowIndexes(IndexSet(integer: route[1] - 1), byExtendingSelection: false); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let before = destination.items.count, beforeIDs = Set(destination.items.map(\.id))
+            delegate.pasteIntoSlide(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            let added = destination.items.filter { !beforeIDs.contains($0.id) || $0.isTableCell && !beforeIDs.contains($0.id) }
+            print("  pasted onto slide \(route[1]): \(before) -> \(destination.items.count) objects, selection \(delegate.canvas.selection.count)")
+            for (copy, original) in zip(destination.items.suffix(chosen.count), chosen) {
+                let font = { (i: SlideItem) in (i.paragraphs.first?.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont).map { "\($0.fontName) \($0.pointSize)" } ?? "-" }
+                print("  \(original.id) -> \(copy.id): text same \(copy.text == original.text), font \(font(copy) == font(original)), frame \(copy.frame.integral == original.frame.integral)")
+            }
+            let ids = destination.document.rootElement()?.descendants("cNvPr").compactMap { $0.attr("id") } ?? []
+            print("  object ids unique in the slide XML: \(Set(ids).count == ids.count), pasted without Fade: \(added.allSatisfy { !$0.hasFade })")
+            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  after undo: \(presentation.slides[route[1] - 1].items.count) objects")
+            delegate.pasteIntoSlide(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            delegate.pasteIntoSlide(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            print("  two more pastes: \(presentation.slides[route[1] - 1].items.count) objects; second paste shifted: \(presentation.slides[route[1] - 1].items.suffix(chosen.count).first.map { $0.frame.minX - (chosen.first?.frame.minX ?? 0) } ?? 0)")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

@@ -211,7 +211,7 @@ final class Presentation {
             }
         }
     }
-    private func parseItem(_ node: XMLElement, inherited: XMLElement?, rels: [String: String]) -> SlideItem {
+    func parseItem(_ node: XMLElement, inherited: XMLElement?, rels: [String: String]) -> SlideItem {
         let props = node.child("spPr")
         let xfrm = props?.child("xfrm") ?? inherited?.child("spPr")?.child("xfrm")
         let frame = CGRect(x: (xfrm?.child("off")?.number("x") ?? 0) / emu, y: (xfrm?.child("off")?.number("y") ?? 0) / emu,
@@ -266,7 +266,7 @@ final class Presentation {
         if value("i") == "1" { font = NSFontManager.shared.convert(font!, toHaveTrait: .italicFontMask) }
         return [.font: font!, .foregroundColor: color(properties?.child("solidFill")) ?? color(fallback?.child("solidFill")) ?? colors["dk1"] ?? .black, .kern: (Double(value("spc") ?? "0") ?? 0) / 100]
     }
-    private func parseTable(_ node: XMLElement) -> [SlideItem] {
+    func parseTable(_ node: XMLElement) -> [SlideItem] {
         guard let table = node.descendant("tbl"), let transform = node.child("xfrm") else { return [] }
         let startX = (transform.child("off")?.number("x") ?? 0) / emu
         var y = (transform.child("off")?.number("y") ?? 0) / emu
@@ -276,7 +276,7 @@ final class Presentation {
             var x = startX; let height = row.number("h") / emu
             for (index, cell) in row.all("tc").enumerated() {
                 let width = index < widths.count ? widths[index] : 100
-                let item = SlideItem(node: cell, id: "cell-\(items.count)", frame: CGRect(x: x, y: y, width: width, height: height))
+                let item = SlideItem(node: cell, id: "cell-\(node.descendant("cNvPr")?.attr("id") ?? "t")-\(items.count)", frame: CGRect(x: x, y: y, width: width, height: height))
                 item.isTableCell = true
                 item.tableNode = node; item.tableID = node.descendant("cNvPr")?.attr("id") ?? "table"
                 let props = cell.child("tcPr")

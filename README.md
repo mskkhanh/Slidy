@@ -14,6 +14,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Press Return in the slide list to add a slide after the selected one, with a heading and text box styled like the deck's other content slides; the new boxes fit their text and grow or shrink as you type (saved as auto-fit, so PowerPoint agrees).
 - Drag slide thumbnails in the left column to reorder slides (saved into the file; ⌘Z undoes it).
 - Click a table to select the whole table (Delete removes it, ⌘Z restores it); double-click a cell to edit its text.
+- Copy objects or a table (⌘C) and paste them (⌘V) on any slide, keeping their look and position; ⌘Z undoes the paste.
 - Select all (⌘A) then F clears every Fade on the slide; select a group and press F to add Fade yourself. ⌘Z undoes it.
 - One click (wand button, top right) applies Fade to every object on every slide, top to bottom. ⌘Z undoes it.
 - Presentation mode with the same fade steps (Play button or ⌘F). The slide number shows small at the bottom left; press delete (⌫) to go back to the previous slide, shown complete. ⌘↓ / ⌘↑ jump to the next / previous slide, also shown complete.

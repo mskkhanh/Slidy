@@ -36,6 +36,7 @@ extension AppDelegate {
             return
         }
         guard let presentation, !busy, showWindow == nil else { return }
+        if let payload = ObjectClipboard.read(), let slide = canvas.slide { pasteObjects(payload, into: slide, in: presentation); return }
         let clipboard = NSPasteboard.general
         do {
             let urls = clipboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
@@ -231,5 +232,24 @@ extension AppDelegate {
         table.scrollRowToVisible(row)
         window.makeFirstResponder(table)
         didChange()
+    }
+}
+
+extension AppDelegate {
+    /// ⌘V with copied objects: same look and position on another slide; shifted a little when pasted on the same slide.
+    func pasteObjects(_ payload: ObjectClipboard.Payload, into slide: Slide, in presentation: Presentation) {
+        canvas.finishEditing(commit: true)
+        let board = NSPasteboard.general
+        let key = "\(board.changeCount)|\(slide.path)"
+        pasteRepeats = (key == lastPasteKey) ? pasteRepeats + 1 : (payload.slide == slide.path ? 1 : 0)
+        lastPasteKey = key
+        checkpoint()
+        do {
+            let created = try presentation.importObjects(payload, into: slide, shift: CGFloat(pasteRepeats) * 24)
+            guard !created.isEmpty else { NSSound.beep(); return }
+            canvas.rebuild()
+            canvas.select(created)
+            didChange()
+        } catch { showError(error) }
     }
 }

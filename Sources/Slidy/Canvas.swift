@@ -27,6 +27,15 @@ final class CanvasView: NSView {
         get { selection.count == 1 ? selection.first : nil }
         set { select(newValue.map { [$0] } ?? []) }
     }
+    /// ⌘C / ⌘X on the slide copy (or cut) the selected objects; ⌘V pastes them, on this slide or another.
+    @objc func copy(_ sender: Any?) {
+        guard editor == nil, !presenting, let slide, !selection.isEmpty else { NSSound.beep(); return }
+        ObjectClipboard.write(selection, from: slide)
+    }
+    @objc func cut(_ sender: Any?) {
+        guard editor == nil, !presenting, !selection.isEmpty else { NSSound.beep(); return }
+        copy(sender); onDelete?()
+    }
     /// The objects that are selected together with `item`: all cells of its table, or the object itself.
     func members(of item: SlideItem) -> [SlideItem] {
         guard let id = item.tableID, let slide else { return [item] }
