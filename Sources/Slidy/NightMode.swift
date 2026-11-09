@@ -14,7 +14,7 @@ enum NightMode {
         return 0.299 * rgb.redComponent + 0.587 * rgb.greenComponent + 0.114 * rgb.blueComponent
     }
     /// Slide background shade: a touch lighter than the pure black editor, so the slide's edge is visible.
-    static let slideBlack = NSColor(white: 0.065, alpha: 1)
+    static let slideBlack = NSColor(white: 0.135, alpha: 1)
     /// Slide background and shape fills: light becomes near-black.
     static func surface(_ color: NSColor) -> NSColor {
         guard let value = brightness(color), value > 0.6 else { return color }
