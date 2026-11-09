@@ -43,6 +43,7 @@ enum Shortcuts {
         ]),
         ("View", [
             ("⌘B", "Hide / show the left sidebar"),
+            ("Drag a slide", "In the left column, drag a thumbnail to a new place to reorder slides (⌘Z undoes it)"),
             ("Pinch", "Zoom in / out around the pointer (trackpad); two-finger scroll moves the slide while zoomed in"),
             ("⌘0", "Fit the slide to the window (reset zoom)"),
             ("⌘L", "Switch night / light mode (also the moon / sun button, top right; display only, never changes the file)")

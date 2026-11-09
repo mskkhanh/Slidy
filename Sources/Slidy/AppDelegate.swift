@@ -73,7 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let scroll = NSScrollView()
         let column = NSTableColumn(identifier: .init("slides")); column.width = 174; column.resizingMask = .autoresizingMask
         table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
-        table.delegate = self; table.dataSource = self; table.backgroundColor = .black
+        table.delegate = self; table.dataSource = self; table.registerForDraggedTypes([AppDelegate.slideRowType]); table.setDraggingSourceOperationMask(.move, forLocal: true); table.draggingDestinationFeedbackStyle = .sourceList; table.backgroundColor = .black
         table.style = .plain
         scroll.drawsBackground = true; scroll.backgroundColor = .black
         scroll.documentView = table

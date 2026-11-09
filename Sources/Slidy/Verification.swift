@@ -449,6 +449,9 @@ enum Verification {
             try afterMove.moveSlide(from: 1, to: 4)   // undo
             try afterMove.saveInPlace()
             guard try Presentation(url: reorderURL).slides.map(\.path) == originalPaths else { throw AppError.message("Slide reorder undo did not restore the order") }
+            guard AppDelegate.slideDropTarget(source: 3, row: 1) == 1, AppDelegate.slideDropTarget(source: 1, row: 4) == 3,
+                  AppDelegate.slideDropTarget(source: 2, row: 2) == nil, AppDelegate.slideDropTarget(source: 2, row: 3) == nil,
+                  AppDelegate.slideDropTarget(source: 0, row: 24) == 23 else { throw AppError.message("Slide drop position maths is wrong") }
             print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")
         } catch { fputs("Verification failed: \(error.localizedDescription)\n", stderr); exit(1) }

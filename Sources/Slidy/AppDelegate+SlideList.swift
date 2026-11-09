@@ -114,6 +114,30 @@ extension AppDelegate {
         let result = NSImage(size: NSSize(width: 146, height: 82)); result.addRepresentation(bitmap)
         thumbnailCache.setObject(result, forKey: NSNumber(value: row)); return result
     }
+    // Drag and drop: reorder slides by dragging a thumbnail; a line shows where it will land.
+    static let slideRowType = NSPasteboard.PasteboardType("com.khanh.slidy.slide-row")
+    /// Dropping before row `row` puts the slide at this index, or nil when it would not move.
+    static func slideDropTarget(source: Int, row: Int) -> Int? {
+        let target = row > source ? row - 1 : row
+        return target == source ? nil : target
+    }
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard presentation != nil, !showingRecents, !busy else { return nil }
+        let item = NSPasteboardItem(); item.setString(String(row), forType: Self.slideRowType); return item
+    }
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
+        guard let presentation, !showingRecents, info.draggingSource as? NSTableView === table,
+              let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
+              Self.slideDropTarget(source: source, row: row) != nil, row <= presentation.slides.count else { return [] }
+        tableView.setDropRow(row, dropOperation: .above)
+        return .move
+    }
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        guard let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
+              let target = Self.slideDropTarget(source: source, row: row) else { return false }
+        DispatchQueue.main.async { [weak self] in self?.moveSlideInDeck(from: source, to: target) }   // after the drop finishes
+        return true
+    }
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard table.selectedRow >= 0, !busy, !suppressSelectionOpen else { return }
         guard let presentation, !showingRecents else {
