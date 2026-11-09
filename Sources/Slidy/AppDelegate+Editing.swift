@@ -87,7 +87,27 @@ extension AppDelegate {
         }
         refreshAllSlides()
     }
-    /// ⌘↑ / ⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
+    /// ⌘G: groups the selected objects' Fade effects so they play together (one number, one icon), or ungroups them.
+    @objc func toggleFadeGroup() {
+        guard !busy, canvas.editor == nil, let slide = canvas.slide else { return }
+        let selection = canvas.selection.filter(\.canMove)
+        let ungroup = !selection.isEmpty && selection.allSatisfy { $0.hasFade && $0.fadeGroup != nil }
+        guard ungroup || selection.count >= 2, permitTimingEdit() else { NSSound.beep(); return }
+        checkpoint()
+        if ungroup {
+            selection.forEach { $0.fadeGroup = nil }
+        } else {
+            let key = UUID().uuidString
+            let order = selection.filter(\.hasFade).map(\.order).min() ?? ((slide.items.map(\.order).max() ?? 0) + 1)
+            for item in selection {
+                if !item.hasFade { item.enableFade(); item.duration = defaultFadeDuration; item.paragraphDurations.removeAll() }
+                item.fadeGroup = key; item.order = order
+            }
+        }
+        slide.normalizeFadeOrder(); slide.timingDirty = true
+        didChange()
+    }
+    /// ⌥⌘↑ / ⌥⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
     func reorderFade(by delta: Int) {
         guard !busy, let slide = canvas.slide else { return }
         let groups = slide.fadeGroups
@@ -122,5 +142,16 @@ extension AppDelegate {
         guard let item = canvas.selected, let slide = canvas.slide, item.canMove else { return }
         canvas.finishEditing(commit: true); checkpoint(); item.node.detach(); slide.items.removeAll { $0 === item }; slide.timingDirty = true
         canvas.selected = nil; canvas.rebuild(); didChange()
+    }
+}
+
+extension AppDelegate {
+    /// ⌘↓ / ⌘↑ while editing: go to the next / previous slide.
+    func moveSlide(by delta: Int) {
+        guard let presentation, !busy, !showingRecents else { return }
+        let next = index + delta
+        guard presentation.slides.indices.contains(next) else { return }
+        table.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
+        table.scrollRowToVisible(next)
     }
 }

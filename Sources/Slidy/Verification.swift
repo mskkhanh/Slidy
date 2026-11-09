@@ -37,6 +37,41 @@ enum Verification {
             print("Memory (MB) every 10 rounds of 24 slides + saves: \(readings.joined(separator: " → "))")
         } catch { fputs("Memory test failed: \(error.localizedDescription)\n", stderr); exit(1) }
     }
+    /// `--dump deck.pptx`: lists every object per slide (frame, kind, text) to understand selection problems.
+    static func dump(path: String) {
+        do {
+            let document = try Presentation(url: URL(fileURLWithPath: path))
+            for (index, slide) in document.slides.enumerated() {
+                print("--- slide \(index + 1) (\(slide.items.count) objects)")
+                for (z, item) in slide.items.enumerated() {
+                    let f = item.frame
+                    print(String(format: "  z%d id=%@ move=%d cell=%d list=%d fade=%d  x%.0f y%.0f w%.0f h%.0f  paras=%d  %@", z, item.id, item.canMove ? 1 : 0, item.isTableCell ? 1 : 0, item.hasList ? 1 : 0, item.hasFade ? 1 : 0, f.minX, f.minY, f.width, f.height, item.paragraphs.count, String(item.text.replacingOccurrences(of: "\n", with: " | ").prefix(40))))
+                }
+            }
+        } catch { fputs("\(error)\n", stderr) }
+    }
+    /// `--hits deck.pptx`: for every object, which object receives a click at its centre.
+    static func hits(path: String) {
+        _ = NSApplication.shared
+        do {
+            let document = try Presentation(url: URL(fileURLWithPath: path))
+            let canvas = CanvasView(frame: CGRect(x: 0, y: 0, width: 1280, height: 720))
+            var blocked = 0
+            for (index, slide) in document.slides.enumerated() {
+                canvas.display(slide, in: document); canvas.layoutSubtreeIfNeeded()
+                for item in slide.items where item.canMove {
+                    let centre = CGPoint(x: item.frame.midX, y: item.frame.midY)
+                    let point = canvas.surface.convert(centre, to: canvas)
+                    let hit = canvas.surface.hitTest(canvas.convert(point, to: canvas.surface.superview))
+                    var view = hit
+                    while let current = view, !(current is ObjectView) { view = current.superview }
+                    let target = (view as? ObjectView)?.item
+                    if target !== item { blocked += 1; print("slide \(index + 1): click on \(item.id) (\(item.text.prefix(24))) goes to \(target?.id ?? "background")") }
+                }
+            }
+            print("\(blocked) objects do not receive a click at their centre")
+        } catch { fputs("\(error)\n", stderr) }
+    }
     static func run() {
         do {
             let arguments = CommandLine.arguments
@@ -233,6 +268,23 @@ enum Verification {
                     throw AppError.message("Timing XML does not match the fade order on slide \(index + 1): \(sequence) vs \(wanted)")
                 }
                 timingChecked += 1
+            }
+            // Group / ungroup (⌘G) keeps numbering clean and survives saving.
+            let groupSlide = fadeDoc.slides[3]
+            let pair = groupSlide.items.filter { $0.canMove && $0.hasFade }
+            if pair.count >= 3 {
+                let before = groupSlide.fadeGroups.count
+                let key = UUID().uuidString
+                let order = pair[0].order
+                for item in [pair[0], pair[2]] { item.fadeGroup = key; item.order = order }
+                groupSlide.normalizeFadeOrder()
+                guard groupSlide.fadeGroups.count == before - 1, groupSlide.fadeGroups.contains(where: { $0.count == 2 }) else { throw AppError.message("Grouping did not merge two effects") }
+                try fadeDoc.saveInPlace()
+                let regrouped = try Presentation(url: persist).slides[3]
+                guard regrouped.fadeGroups.map({ $0.map(\.id) }) == groupSlide.fadeGroups.map({ $0.map(\.id) }) else { throw AppError.message("Group did not survive saving") }
+                [pair[0], pair[2]].forEach { $0.fadeGroup = nil }
+                groupSlide.normalizeFadeOrder()
+                guard groupSlide.fadeGroups.count == before, groupSlide.fadeGroups.map(\.count).allSatisfy({ $0 == 1 }) else { throw AppError.message("Ungrouping did not split the effects") }
             }
             print("Fade persistence: \(timingChecked) slides re-read from the saved file with identical order, groups and valid timing XML")
             print("PASS text, Vietnamese, line breaks, list insertion, geometry, image, save/reopen, \(expected) fade steps, back navigation")

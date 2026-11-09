@@ -20,6 +20,8 @@ extension AppDelegate {
         for (title, selector, key) in [("Cắt", "cut:", "x"), ("Sao chép", "copy:", "c"), ("Chọn tất cả", "selectAll:", "a")] { edit.addItem(withTitle: title, action: Selector(selector), keyEquivalent: key) }
         edit.addItem(menuItem("Dán", #selector(pasteIntoSlide), key: "v"))
         let editItem = NSMenuItem(); editItem.submenu = edit; menu.addItem(editItem)
+        edit.addItem(.separator())
+        edit.addItem(menuItem("Nhóm / Tách nhóm Fade", #selector(toggleFadeGroup), key: "g"))
         let insert = NSMenu(title: "Chèn")
         insert.addItem(menuItem("Văn bản · T", #selector(addText))); insert.addItem(menuItem("Tiêu đề · H", #selector(addHeading))); insert.addItem(menuItem("Danh sách bullet", #selector(addList))); insert.addItem(menuItem("Ảnh…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
@@ -28,6 +30,7 @@ extension AppDelegate {
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
         let view = NSMenu(title: "Xem")
         view.addItem(menuItem("Chế độ tối / sáng", #selector(toggleNight), key: "l"))
+        view.addItem(menuItem("Ẩn / hiện thanh bên trái", #selector(toggleSidebar), key: "b"))
         let viewItem = NSMenuItem(); viewItem.submenu = view; menu.addItem(viewItem)
         let help = NSMenu(title: "Trợ giúp")
         help.addItem(menuItem("Phím tắt", #selector(toggleShortcuts), key: "/"))
@@ -48,6 +51,14 @@ extension AppDelegate {
         thumbnailCache.removeAllObjects()
         canvas.rebuild(); canvas.needsDisplay = true
         if presentation != nil, !showingRecents { table.reloadData() }
+    }
+    @objc func toggleSidebar() { setSidebarHidden(!sidebarHidden) }
+    func setSidebarHidden(_ hidden: Bool, remember: Bool = true) {
+        sidebarHidden = hidden
+        sidebarViews.forEach { $0.isHidden = hidden }
+        canvasLeadingOpen.isActive = !hidden; canvasLeadingClosed.isActive = hidden
+        emptyRecents.isHidden = hidden || !(recentsMode && recentSidebarEntries.isEmpty)
+        if remember { UserDefaults.standard.set(hidden, forKey: "sidebarHidden") }
     }
     @objc func toggleShortcuts() {
         if let sheet = window.attachedSheet {

@@ -13,6 +13,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     var showingRecents = false
+    /// Left column (thumbnails / recent files) can be hidden with ⌘B; the choice is remembered.
+    var sidebarHidden = UserDefaults.standard.bool(forKey: "sidebarHidden")
+    var sidebarViews: [NSView] = []
+    var canvasLeadingOpen: NSLayoutConstraint!
+    var canvasLeadingClosed: NSLayoutConstraint!
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false
     let emptyRecents = NSTextField(wrappingLabelWithString: "Chưa có bài trình chiếu nào.\nBấm ⌘O để mở một file .pptx.")
@@ -48,6 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "t": self?.addText()
             case "h": self?.addHeading()
             case "present": self?.presentSlides()
+            case "slideNext": self?.moveSlide(by: 1)
+            case "slidePrevious": self?.moveSlide(by: -1)
             default: break
             }
         }
@@ -113,8 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
             scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
             separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
+            canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
+        canvasLeadingOpen = canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor)
+        canvasLeadingClosed = canvas.leadingAnchor.constraint(equalTo: root.leadingAnchor)
+        sidebarViews = [scroll, separator]
+        setSidebarHidden(sidebarHidden, remember: false)
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true
         canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
@@ -165,6 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     static func main() {
         #if DEBUG
         if CommandLine.arguments.contains("--verify") { Verification.run(); return }
+        if let at = CommandLine.arguments.firstIndex(of: "--hits"), CommandLine.arguments.count > at + 1 { Verification.hits(path: CommandLine.arguments[at + 1]); return }
+        if let at = CommandLine.arguments.firstIndex(of: "--dump"), CommandLine.arguments.count > at + 1 { Verification.dump(path: CommandLine.arguments[at + 1]); return }
         if let at = CommandLine.arguments.firstIndex(of: "--memory"), CommandLine.arguments.count > at + 1 { Verification.memory(path: CommandLine.arguments[at + 1], mode: CommandLine.arguments.count > at + 2 ? CommandLine.arguments[at + 2] : "all"); return }
         #endif
         let application = NSApplication.shared

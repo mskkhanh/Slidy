@@ -86,16 +86,27 @@ final class InlineTextView: NSTextView {
 
 final class OrderBadgeView: NSView {
     private let number: Int
-    init(number: Int) { self.number = number; super.init(frame: .zero) }
+    private let grouped: Bool
+    init(number: Int, grouped: Bool) { self.number = number; self.grouped = grouped; super.init(frame: .zero) }
     required init?(coder: NSCoder) { fatalError() }
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    /// Grouped effects (⌘G) play together; their badge is a pill with a small link symbol after the number.
     override func draw(_ dirtyRect: NSRect) {
-        NSColor(white: 0.18, alpha: 0.92).setFill(); NSBezierPath(ovalIn: bounds).fill()
+        NSColor(white: 0.18, alpha: 0.92).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
+        let height = bounds.height
         let text = NSAttributedString(string: "\(number)", attributes: [
-            .font: NSFont.systemFont(ofSize: bounds.height * 0.58, weight: .semibold), .foregroundColor: NSColor.white])
+            .font: NSFont.systemFont(ofSize: height * 0.58, weight: .semibold), .foregroundColor: NSColor.white])
         let size = text.size()
-        text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+        let numberCentre = grouped ? height / 2 : bounds.midX
+        text.draw(at: NSPoint(x: numberCentre - size.width / 2, y: bounds.midY - size.height / 2))
+        guard grouped, let symbol = NSImage(systemSymbolName: "link", accessibilityDescription: "Nhóm"),
+              let configured = symbol.withSymbolConfiguration(.init(pointSize: height * 0.5, weight: .semibold)) else { return }
+        let tinted = configured.copy() as! NSImage
+        tinted.lockFocus(); NSColor.white.set(); NSRect(origin: .zero, size: tinted.size).fill(using: .sourceIn); tinted.unlockFocus()
+        let side = height * 0.55
+        tinted.draw(in: NSRect(x: height + (bounds.width - height - side) / 2 - 1, y: bounds.midY - side / 2, width: side, height: side))
     }
 }
 

@@ -13,6 +13,10 @@ final class SlideEditorWindow: NSWindow {
         if event.type == .keyDown, attachedSheet == nil, let onShortcut {
             let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
             if modifiers.isEmpty, event.keyCode == 53, !(firstResponder is NSTextView), onEscape?() == true { return }
+            if modifiers == .command, [125, 126].contains(event.keyCode), !(firstResponder is NSTextView) {
+                if !event.isARepeat { onShortcut(event.keyCode == 125 ? "slideNext" : "slidePrevious") }
+                return
+            }
             if modifiers == .command, [36, 76].contains(event.keyCode) {
                 if !event.isARepeat { onShortcut("present") }
                 return

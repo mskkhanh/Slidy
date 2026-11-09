@@ -6,7 +6,7 @@ final class GrayRowView: NSTableRowView {
 
     override func drawSelection(in dirtyRect: NSRect) {
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-        (dark ? NSColor(white: 1, alpha: 0.16) : NSColor(white: 0, alpha: 0.10)).setFill()
+        (dark ? NSColor(white: 1, alpha: 0.30) : NSColor(white: 0, alpha: 0.18)).setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 1), xRadius: 6, yRadius: 6).fill()
     }
 }

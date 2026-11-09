@@ -128,6 +128,10 @@ final class Slide {
         item.removeFade()
         timingDirty = true
     }
+    /// Renumbers effects 0, 1, 2... in their current order (members of a group share one number).
+    func normalizeFadeOrder() {
+        for (index, items) in fadeGroups.enumerated() { for item in items { item.order = index } }
+    }
     func moveFadeGroup(from source: Int, to insertion: Int) {
         var groups = fadeGroups
         let group = groups.remove(at: source)

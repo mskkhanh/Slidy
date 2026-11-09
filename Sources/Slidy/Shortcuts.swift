@@ -12,16 +12,20 @@ enum Shortcuts {
         ("Edit", [
             ("⌘Z / ⇧⌘Z", "Undo / Redo"),
             ("⌘X  ⌘C  ⌘V", "Cut / Copy / Paste (images too)"),
-            ("⌘A", "Select all objects on the slide")
+            ("⌘A", "Select all objects on the slide"),
+            ("⌘↑ / ⌘↓", "Go to the previous / next slide while editing")
         ]),
         ("Insert and effects", [
             ("T", "Add a text box"),
             ("H", "Add a heading"),
             ("F", "Toggle Fade: remove it if every selected object has it (e.g. ⌘A then F clears the slide), otherwise add it"),
             ("wand button", "Top right: apply Fade to every object on every slide, top to bottom (⌘Z undoes it)"),
-            ("⌘↑ / ⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges on the slide update)")
+            ("⌘G", "Group / ungroup the Fade of the selected objects: they play together and show one number with a link icon"),
+            ("⌥⌘↑ / ⌥⌘↓", "Move the selected objects' Fade effect earlier / later (the order badges update)"),
         ]),
         ("Objects on the slide", [
+            ("Click / ⇧-click", "Select an object / add or remove it from the selection (a marquee selects objects it fully encloses)"),
+            ("⌥-click", "Select the object underneath (e.g. a card behind its text); repeat to go deeper"),
             ("Enter", "Edit the text of the selected object"),
             ("⇧Enter", "New line inside a text box"),
             ("Esc", "Stop editing text"),
@@ -37,6 +41,7 @@ enum Shortcuts {
             ("Esc", "Exit the presentation")
         ]),
         ("View", [
+            ("⌘B", "Hide / show the left sidebar"),
             ("⌘L", "Switch night / light mode (also the moon / sun button, top right; display only, never changes the file)")
         ]),
         ("Help", [

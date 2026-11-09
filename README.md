@@ -8,6 +8,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Edits save straight into the original file. Quit is instant, and the app reopens the last file at the last slide.
 - Add and edit text, headings, bullet lists and images.
 - Fade animations with numbered order badges on the slide: select an object and press ⌘↑ / ⌘↓ to reorder.
+- ⌘G groups the selected Fade effects (one number, link icon); ⌥⌘↑/↓ reorders them; ⌘↑/↓ switches slides; ⌘B hides the left sidebar.
 - Select all (⌘A) then F clears every Fade on the slide; select a group and press F to add Fade yourself. ⌘Z undoes it.
 - One click (wand button, top right) applies Fade to every object on every slide, top to bottom. ⌘Z undoes it.
 - Presentation mode with the same fade steps (Play button or ⌘F). The slide number shows small at the bottom left; press delete (⌫) to go back to the previous slide, shown complete. ⌘↓ / ⌘↑ jump to the next / previous slide, also shown complete.

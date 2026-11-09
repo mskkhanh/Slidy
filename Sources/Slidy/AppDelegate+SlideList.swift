@@ -43,7 +43,7 @@ extension AppDelegate {
             table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
         suppressSelectionOpen = false
-        emptyRecents.isHidden = !(recentsMode && recentSidebarEntries.isEmpty)
+        emptyRecents.isHidden = sidebarHidden || !(recentsMode && recentSidebarEntries.isEmpty)
     }
     func numberOfRows(in tableView: NSTableView) -> Int {
         if let presentation, !showingRecents { return presentation.slides.count }
@@ -132,6 +132,7 @@ extension AppDelegate {
     @objc func toggleRecents() {
         guard presentation != nil, !busy, window.attachedSheet == nil, showWindow == nil else { return }
         canvas.finishEditing(commit: true)
+        if sidebarHidden { setSidebarHidden(false) }
         showingRecents.toggle()
         if showingRecents { updateRecentSidebar() }
         else { showSlideList() }

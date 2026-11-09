@@ -41,6 +41,7 @@ final class CanvasView: NSView {
     var fadeSteps: [[(NSView, Double)]] = []
     var step = 0
     private var dragOrigin: CGPoint?
+    private var dragItem: SlideItem?
     private var originalFrame = CGRect.zero
     private var resizeCorner: CGPoint?
     private var marqueeStart: CGPoint?
@@ -149,9 +150,11 @@ final class CanvasView: NSView {
         guard showsOrderBadges, !presenting, let slide else { return }
         let diameter = 20 / surfaceScale
         for (number, group) in slide.fadeGroups.enumerated() {
+            let grouped = group.count > 1
+            let width = grouped ? diameter * 1.9 : diameter
             for item in group {
-                let badge = OrderBadgeView(number: number + 1)
-                badge.frame = CGRect(x: item.frame.maxX - diameter * 0.5, y: item.frame.minY - diameter * 0.5, width: diameter, height: diameter)
+                let badge = OrderBadgeView(number: number + 1, grouped: grouped)
+                badge.frame = CGRect(x: item.frame.maxX + diameter * 0.5 - width, y: item.frame.minY - diameter * 0.5, width: width, height: diameter)
                 surface.addSubview(badge); badgeViews.append(badge)
             }
         }
@@ -189,7 +192,7 @@ final class CanvasView: NSView {
         let area = CGRect(x: min(start.x, point.x), y: min(start.y, point.y),
                           width: abs(point.x - start.x), height: abs(point.y - start.y))
         let existing = Set(marqueeBase.map(ObjectIdentifier.init))
-        select(slide.items.filter { $0.canMove && (existing.contains(ObjectIdentifier($0)) || area.intersects($0.frame)) })
+        select(slide.items.filter { $0.canMove && (existing.contains(ObjectIdentifier($0)) || area.contains($0.frame)) })
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         marqueeLayer.lineWidth = 1 / surfaceScale
@@ -217,23 +220,31 @@ final class CanvasView: NSView {
             select(items.contains(where: { $0 === view.item }) ? items.filter { $0 !== view.item } : items + [view.item])
             return
         }
-        selected = view.item
-        if event.clickCount == 2 && view.item.textBody != nil { startEditing(); return }
-        guard view.item.canMove else { return }
         let point = surface.convert(event.locationInWindow, from: nil)
-        dragOrigin = point; originalFrame = view.item.frame; editedDrag = false
-        resizeCorner = resizeHandle(at: point, for: view.item)
+        var target = view.item
+        // ⌥-click picks the object underneath (e.g. the card behind its text); repeat to go deeper.
+        if event.modifierFlags.contains(.option), let slide {
+            let stack = slide.items.filter { $0.canMove && $0.frame.contains(point) }.reversed()
+            let order = Array(stack)
+            if let current = selected, let position = order.firstIndex(where: { $0 === current }) { target = order[(position + 1) % order.count] }
+            else if order.count > 1 { target = order[1] }
+        }
+        selected = target
+        if event.clickCount == 2 && target.textBody != nil { startEditing(); return }
+        guard target.canMove else { return }
+        dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
+        resizeCorner = resizeHandle(at: point, for: target)
     }
     func objectMouseDragged(_ view: ObjectView, event: NSEvent) {
         if marqueeStart != nil { updateMarquee(event); return }
-        guard let start = dragOrigin, editor == nil, !presenting else { return }
+        guard let start = dragOrigin, let item = dragItem, let host = objectViews.first(where: { $0.item === item }), editor == nil, !presenting else { return }
         let point = surface.convert(event.locationInWindow, from: nil)
         let dx = point.x - start.x, dy = point.y - start.y
         guard abs(dx) + abs(dy) > 0.5 else { return }
         if !editedDrag { onWillEdit?(); editedDrag = true }
         var frame = originalFrame
         if let corner = resizeCorner {
-            if view.item.imageURL != nil {
+            if item.imageURL != nil {
                 let left = corner.x == originalFrame.minX
                 let top = corner.y == originalFrame.minY
                 let dw = (left ? -dx : dx) / originalFrame.width
@@ -248,7 +259,7 @@ final class CanvasView: NSView {
                 frame.size.height = max(24, originalFrame.height + dy)
             }
         } else { frame.origin.x += dx; frame.origin.y += dy }
-        view.item.updateFrame(frame); view.frame = frame; updateSelection()
+        item.updateFrame(frame); host.frame = frame; updateSelection()
     }
     func objectMouseUp(_ view: ObjectView, event: NSEvent) {
         endMarquee()
@@ -375,7 +386,7 @@ final class CanvasView: NSView {
             return
         }
         if [125, 126].contains(event.keyCode),
-           event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command {
+           event.modifierFlags.intersection([.command, .control, .option, .shift]) == [.command, .option] {
             if !event.isARepeat { onReorderFade?(event.keyCode == 126 ? -1 : 1) }
             return
         }
