@@ -29,30 +29,50 @@ enum Shortcuts {
     ]
 }
 
+/// A key combination drawn as a small gray keycap, so it stands apart from the description.
+private final class KeyCap: NSView {
+    private let label: NSTextField
+    init(_ text: String) {
+        label = NSTextField(labelWithString: text)
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 5
+        layer?.backgroundColor = NSColor.gray.withAlphaComponent(0.28).cgColor
+        label.font = .monospacedSystemFont(ofSize: 11.5, weight: .medium)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7), label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 2), label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError() }
+}
+
 final class ShortcutsPanel: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 860, height: 480), styleMask: [.titled], backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
         title = "Keyboard Shortcuts"
-        let heading = NSTextField(labelWithString: "Keyboard Shortcuts")
-        heading.font = .systemFont(ofSize: 18, weight: .semibold)
-        // Two columns so the whole list is visible at once.
         func column(_ sections: ArraySlice<(title: String, items: [(keys: String, action: String)])>) -> NSStackView {
-            let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 4
+            let stack = NSStackView(); stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 6
             for section in sections {
                 let header = NSTextField(labelWithString: section.title.uppercased())
-                header.font = .systemFont(ofSize: 11, weight: .semibold); header.textColor = .secondaryLabelColor
+                header.font = .systemFont(ofSize: 10.5, weight: .semibold); header.textColor = .secondaryLabelColor
                 if !stack.views.isEmpty { stack.setCustomSpacing(14, after: stack.views.last!) }
                 stack.addArrangedSubview(header)
-                stack.setCustomSpacing(7, after: header)
+                stack.setCustomSpacing(8, after: header)
                 for item in section.items {
-                    let keys = NSTextField(labelWithString: item.keys)
-                    keys.font = .monospacedSystemFont(ofSize: 11.5, weight: .medium)
-                    keys.widthAnchor.constraint(equalToConstant: 112).isActive = true
-                    let action = NSTextField(wrappingLabelWithString: item.action)
-                    action.font = .systemFont(ofSize: 12)
-                    action.preferredMaxLayoutWidth = 285
-                    action.widthAnchor.constraint(lessThanOrEqualToConstant: 285).isActive = true
-                    let row = NSStackView(views: [keys, action]); row.alignment = .firstBaseline; row.spacing = 10
+                    let cap = KeyCap(item.keys)
+                    let capSlot = NSView(); capSlot.translatesAutoresizingMaskIntoConstraints = false
+                    cap.translatesAutoresizingMaskIntoConstraints = false
+                    capSlot.addSubview(cap)
+                    NSLayoutConstraint.activate([
+                        capSlot.widthAnchor.constraint(equalToConstant: 112),
+                        cap.leadingAnchor.constraint(equalTo: capSlot.leadingAnchor), cap.topAnchor.constraint(equalTo: capSlot.topAnchor), cap.bottomAnchor.constraint(equalTo: capSlot.bottomAnchor)
+                    ])
+                    let action = NSTextField(labelWithString: item.action)
+                    action.font = .systemFont(ofSize: 12.5)
+                    let row = NSStackView(views: [capSlot, action]); row.alignment = .centerY; row.spacing = 8
                     stack.addArrangedSubview(row)
                 }
             }
@@ -66,28 +86,22 @@ final class ShortcutsPanel: NSPanel {
             if gap < bestGap { bestGap = gap; split = candidate }
         }
         let columns = NSStackView(views: [column(Shortcuts.sections[..<split]), column(Shortcuts.sections[split...])])
-        columns.orientation = .horizontal; columns.alignment = .top; columns.spacing = 36
-        let flipped = FlippedView(); flipped.translatesAutoresizingMaskIntoConstraints = false
-        columns.translatesAutoresizingMaskIntoConstraints = false
-        flipped.addSubview(columns)
-        NSLayoutConstraint.activate([
-            columns.leadingAnchor.constraint(equalTo: flipped.leadingAnchor, constant: 20),
-            columns.topAnchor.constraint(equalTo: flipped.topAnchor, constant: 8),
-            columns.bottomAnchor.constraint(equalTo: flipped.bottomAnchor, constant: -12),
-            flipped.widthAnchor.constraint(equalToConstant: 840)
-        ])
-        let scroll = NSScrollView(); scroll.documentView = flipped; scroll.hasVerticalScroller = true; scroll.drawsBackground = false
+        columns.orientation = .horizontal; columns.alignment = .top; columns.spacing = 32
         let close = NSButton(title: "Close", target: self, action: #selector(closeSheet))
         close.keyEquivalent = "\u{1b}"
         let root = NSView()
-        for view in [heading, scroll, close] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
+        for view in [columns, close] { view.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(view) }
         NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20), heading.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
-            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8), scroll.bottomAnchor.constraint(equalTo: close.topAnchor, constant: -10),
-            close.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20), close.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16)
+            columns.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 22), columns.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            close.topAnchor.constraint(equalTo: columns.bottomAnchor, constant: 16),
+            close.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18), close.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -14),
+            columns.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -22)
         ])
         contentView = root
+        root.layoutSubtreeIfNeeded()
+        // Fit the window to its content: no empty space on the right or below.
+        let fit = root.fittingSize
+        setContentSize(NSSize(width: fit.width + 4, height: fit.height))
     }
     @objc private func closeSheet() { sheetParent?.endSheet(self) }
     override func cancelOperation(_ sender: Any?) { closeSheet() }

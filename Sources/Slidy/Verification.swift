@@ -639,7 +639,6 @@ enum Verification {
         let panel = ShortcutsPanel()
         panel.appearance = NSAppearance(named: .aqua)   // dark text so the render is readable on white
         guard let content = panel.contentView else { return }
-        panel.setContentSize(NSSize(width: 860, height: 480))
         panel.orderFront(nil); panel.layoutIfNeeded(); content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
