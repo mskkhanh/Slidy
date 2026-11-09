@@ -22,6 +22,7 @@ extension AppDelegate {
         let editItem = NSMenuItem(); editItem.submenu = edit; menu.addItem(editItem)
         edit.addItem(.separator())
         edit.addItem(menuItem("Nhóm / Tách nhóm Fade", #selector(toggleFadeGroup), key: "g"))
+        edit.addItem(menuItem("Giãn / thu khoảng cách các mục danh sách", #selector(toggleListSpacing)))
         let insert = NSMenu(title: "Chèn")
         insert.addItem(menuItem("Văn bản · T", #selector(addText))); insert.addItem(menuItem("Tiêu đề · H", #selector(addHeading))); insert.addItem(menuItem("Danh sách bullet", #selector(addList))); insert.addItem(menuItem("Ảnh…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)

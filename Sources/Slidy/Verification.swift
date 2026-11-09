@@ -725,6 +725,27 @@ enum Verification {
             let removedTypes = try String(contentsOf: afterRemoval.folder.appendingPathComponent("[Content_Types].xml"), encoding: .utf8)
             guard afterRemoval.slides.count == existingStructure.count, !removedTypes.contains("PartName=\"/\(created.path)\""),
                   !FileManager.default.fileExists(atPath: afterRemoval.folder.appendingPathComponent(created.path).path) else { throw AppError.message("Undoing the new slide left parts behind") }
+            // List spacing: new lists breathe, existing lists change only on request, and it is saved as spcAft.
+            let spaceDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))
+            let spaceSlide = spaceDoc.slides[1]
+            let newList = spaceDoc.addText(to: spaceSlide, list: true)
+            spaceDoc.updateText(newList, text: "Un\nDeux\nTrois", bulletRows: [0, 1, 2])
+            guard newList.paragraphs.allSatisfy({ $0.after > 5 && $0.after < 14 }) else { throw AppError.message("New list items have no room: \(newList.paragraphs.map(\.after))") }
+            let plain = spaceDoc.addText(to: spaceSlide, list: false)
+            spaceDoc.updateText(plain, text: "Un\nDeux", bulletRows: [0, 1])   // text turned into a list by typing "- "
+            guard plain.paragraphs.allSatisfy({ $0.bullet != nil && $0.after > 5 }) else { throw AppError.message("A paragraph turned into a list item got no room") }
+            let existing = spaceSlide.items.first(where: { $0.hasList && $0 !== newList && $0 !== plain && $0.canMove })
+            if let existing {
+                let untouched = existing.paragraphs.map(\.after)
+                guard !untouched.contains(where: { $0 > 0 }) else { throw AppError.message("An existing deck list already had spacing?") }
+                spaceDoc.setListSpacing(existing, on: true)
+                guard existing.paragraphs.filter({ $0.bullet != nil }).allSatisfy({ $0.after > 5 }) else { throw AppError.message("Spreading an existing list failed") }
+                let spaceURL = output.appendingPathComponent("spacing.pptx")
+                try spaceDoc.save(to: spaceURL)
+                guard let backList = try Presentation(url: spaceURL).slides[1].items.first(where: { $0.id == existing.id }), backList.paragraphs.filter({ $0.bullet != nil }).allSatisfy({ $0.after > 5 }) else { throw AppError.message("List spacing did not survive saving") }
+                spaceDoc.setListSpacing(existing, on: false)
+                guard existing.paragraphs.map(\.after) == untouched else { throw AppError.message("Tightening did not restore the list") }
+            }
             // Deleting a slide: gone from the list, rels, content types and files (notes too); undo brings back everything.
             let deleteURL = output.appendingPathComponent("delete.pptx")
             try? FileManager.default.removeItem(at: deleteURL)

@@ -253,3 +253,16 @@ extension AppDelegate {
         } catch { showError(error) }
     }
 }
+
+extension AppDelegate {
+    /// Your choice for lists already in the deck: spread the items a little, or put them back as they were.
+    @objc func toggleListSpacing() {
+        guard !busy, canvas.editor == nil, let slide = canvas.slide, let presentation else { return }
+        let lists = canvas.selection.filter { $0.canMove && $0.hasList && $0.textBody != nil }
+        guard !lists.isEmpty else { NSSound.beep(); return }
+        let spread = lists.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.after > 0 } }
+        checkpoint()
+        lists.forEach { presentation.setListSpacing($0, on: !spread) }
+        canvas.rebuild(); didChange()
+    }
+}

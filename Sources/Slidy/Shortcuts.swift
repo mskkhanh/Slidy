@@ -19,6 +19,7 @@ enum Shortcuts {
         ]),
         ("Insert and effects", [
             ("T", "Add a text box"),
+            ("Edit menu", "Spread / tighten the space between the items of the selected lists (new lists are spread by default; lists already in the deck only change when you ask)"),
             ("H", "Add a heading"),
             ("F", "Toggle Fade: remove it if every selected object has it (e.g. ⌘A then F clears the slide), otherwise add it"),
             ("wand button", "Top right: apply Fade to every object on every slide, top to bottom (⌘Z undoes it)"),

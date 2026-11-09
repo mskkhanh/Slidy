@@ -70,6 +70,8 @@ extension Presentation {
                 if let next = pp.elements.first(where: { ["tabLst", "defRPr", "extLst"].contains($0.localName ?? "") }) {
                     pp.insertChild(bullet, at: next.index)
                 } else { pp.addChild(bullet) }
+                // A paragraph that becomes a list item gets room after it, so lists breathe.
+                if wantsBullet, !hasBullet, pp.child("spcAft") == nil { Self.insertListSpacing(into: pp, paragraph: p) }
                 let hanging = wantsNumber ? "342900" : "285750"
                 pp.set("marL", wantsBullet ? hanging : "0")
                 pp.set("indent", wantsBullet ? "-" + hanging : "0")
@@ -107,6 +109,27 @@ extension Presentation {
         item.autoFit = true
         fitFrame(item)
     }
+    /// Space after each list item, as a share of the font size ("a few tens of percent": not too tight, not too loose).
+    static let listSpacingFactor = 0.4
+    /// Puts <a:spcAft> in the right place of <a:pPr>: after the line and before-spacing, before the bullet.
+    static func insertListSpacing(into properties: XMLElement, paragraph: XMLElement) {
+        let size = Double(paragraph.child("r")?.child("rPr")?.attr("sz") ?? "2400") ?? 2400
+        let spacing = fragment("<a:spcAft><a:spcPts val=\"\(Int(size * listSpacingFactor))\"/></a:spcAft>")
+        let after = ["buClrTx", "buClr", "buSzTx", "buSzPct", "buSzPts", "buFontTx", "buFont", "buNone", "buAutoNum", "buChar", "buBlip", "tabLst", "defRPr", "extLst"]
+        if let next = properties.elements.first(where: { after.contains($0.localName ?? "") }) { properties.insertChild(spacing, at: next.index) }
+        else { properties.addChild(spacing) }
+    }
+    /// Turns the extra space between list items on or off for one text object (the person's choice for existing lists).
+    func setListSpacing(_ item: SlideItem, on: Bool) {
+        guard let body = item.textBody else { return }
+        for paragraph in body.all("p") {
+            guard let properties = paragraph.child("pPr"), properties.child("buChar") != nil || properties.child("buAutoNum") != nil else { continue }
+            properties.child("spcAft")?.detach()
+            if on { Self.insertListSpacing(into: properties, paragraph: paragraph) }
+        }
+        configureText(item)
+        fitFrame(item)
+    }
     func nextID(_ slide: Slide) -> String {
         String((slide.document.rootElement()?.descendants("cNvPr").compactMap { Int($0.attr("id") ?? "") }.max() ?? 1) + 1)
     }
@@ -118,7 +141,7 @@ extension Presentation {
         let fontSize = heading ? 4000 : 2400
         let typeface = heading ? majorFont : minorFont
         let bullet = list ? "<a:buChar char=\"•\"/>" : "<a:buNone/>"
-        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : 3360)\"/></a:lnSpc>\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
+        let p = "<a:p><a:pPr marL=\"\(list ? 304800 : 0)\" indent=\"\(list ? -304800 : 0)\"><a:lnSpc><a:spcPts val=\"\(heading ? 4800 : 3360)\"/></a:lnSpc>\(list ? "<a:spcAft><a:spcPts val=\"\(Int(Double(fontSize) * Self.listSpacingFactor))\"/></a:spcAft>" : "")\(bullet)</a:pPr><a:r><a:rPr sz=\"\(fontSize)\" b=\"\(heading ? 1 : 0)\"><a:solidFill><a:srgbClr val=\"\(foreground)\"/></a:solidFill><a:latin typeface=\"\(escapeXML(typeface))\"/></a:rPr><a:t>\(placeholder)</a:t></a:r></a:p>"
         let node = fragment("<p:sp><p:nvSpPr><p:cNvPr id=\"\(id)\" name=\"\(name)\"/><p:cNvSpPr txBox=\"1\"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr lIns=\"0\" rIns=\"0\" tIns=\"0\" bIns=\"0\" wrap=\"square\"/><a:lstStyle/>\(p)</p:txBody></p:sp>")
         slide.tree.addChild(node)
         let item = SlideItem(node: node, id: id, frame: .zero)
