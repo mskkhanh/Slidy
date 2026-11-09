@@ -54,6 +54,7 @@ extension AppDelegate {
                     self.table.scrollRowToVisible(position)
                     self.canvas.display(document.slides[position], in: document)
                     self.updateStatus()
+                    self.enforceStandardListSpacing(document.slides)   // lists always use the standard spacing
                 case .failure(let error):
                     // A file that is gone is dropped from the list; one that merely failed to open stays.
                     if restoring || !FileManager.default.fileExists(atPath: url.path) {
@@ -99,8 +100,9 @@ extension AppDelegate {
         }
         canvas.finishEditing(commit: true)
         guard modified, let presentation else { return true }
-        do { try presentation.saveInPlace(); modified = false; window.isDocumentEdited = false; return true }
+        do { try presentation.saveInPlace(); modified = false; saveFailing = false; window.isDocumentEdited = false; return true }
         catch {
+            saveFailing = true
             if !silent, window.attachedSheet == nil { showError(error) }
             return false
         }
@@ -153,4 +155,24 @@ extension AppDelegate {
         }
     }
     func showError(_ error: Error) { let alert = NSAlert(error: error); alert.beginSheetModal(for: window) }
+}
+
+extension AppDelegate {
+    /// Every bullet and numbered list uses the standard line spacing. Applied to the whole deck when a file opens and to a slide
+    /// whenever it is shown; saved by autosave like any edit. It makes no undo step and pauses while saving is failing,
+    /// so it can never start a save loop.
+    func enforceStandardListSpacing(_ slides: [Slide]) {
+        guard let presentation, !saveFailing else { return }
+        var changed = false
+        for slide in slides {
+            for item in slide.items where item.canMove && item.hasList && item.textBody != nil {
+                if presentation.standardizeListSpacing(item) { changed = true }
+            }
+        }
+        guard changed else { return }
+        thumbnailCache.removeAllObjects()
+        table.reloadData()
+        canvas.rebuild()
+        didChange()
+    }
 }

@@ -6,7 +6,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 
 - Opens PowerPoint `.pptx` files and renders the slides.
 - Edits save straight into the original file. Quit is instant, and the app reopens the last file at the last slide.
-- Every bullet and numbered list uses one standard line spacing (line height 1.94 × the font size). New lists get it automatically; Edit > Apply Standard List Spacing… applies it to the lists already in a deck (⌘Z undoes it).
+- Every bullet and numbered list always uses one standard line spacing (line height 1.94 × the font size): applied automatically when a deck is opened and whenever a slide is shown, and saved by autosave.
 - Add and edit text, headings, bullet and numbered lists (type `1` + Space or `-` + Space) and images (inserted pictures get slightly rounded corners).
 - Fade animations with numbered order badges on the slide: select an object and press ⇧↑ / ⇧↓ to reorder.
 - ⌘G groups the selected Fade effects (one number, link icon); ⇧↑/⇧↓ reorders them (⌘↑/↓ switches slides); ⌘↑/↓ switches slides (or, with the slide list focused, moves the selected slide up/down in the deck); ⌘B hides the left sidebar.

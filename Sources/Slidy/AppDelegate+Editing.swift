@@ -266,33 +266,7 @@ extension AppDelegate {
             canvas.rebuild()
             canvas.select(created)
             didChange()
+            enforceStandardListSpacing([slide])   // a pasted list takes the standard spacing too
         } catch { showError(error) }
-    }
-}
-
-extension AppDelegate {
-    /// Edit menu: gives every bullet and numbered list in the deck the standard line spacing (table cells are left alone).
-    @objc func applyStandardListSpacing() {
-        guard let presentation, !busy, canvas.editor == nil, showWindow == nil, window.attachedSheet == nil else { return }
-        guard !listsInDeck(presentation).isEmpty else { NSSound.beep(); return }
-        canvas.finishEditing(commit: true)
-        let alert = NSAlert()
-        alert.messageText = "Apply the standard list spacing?"
-        alert.informativeText = "Every bullet and numbered list in the deck gets the same line spacing (line height 1.94 × the font size). ⌘Z undoes it."
-        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        standardizeAllLists()
-    }
-    func listsInDeck(_ presentation: Presentation) -> [SlideItem] {
-        presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList && $0.textBody != nil } }
-    }
-    /// One undo step for the whole deck. Returns how many lists changed.
-    @discardableResult
-    func standardizeAllLists() -> Int {
-        guard let presentation else { return 0 }
-        checkpointAll()
-        let changed = listsInDeck(presentation).filter { presentation.standardizeListSpacing($0) }.count
-        refreshAllSlides()
-        return changed
     }
 }

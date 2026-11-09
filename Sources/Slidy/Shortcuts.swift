@@ -31,8 +31,7 @@ enum Shortcuts {
             ("Enter · Esc", "Edit the selected object's text · stop editing"),
             ("⇧Enter", "New line inside a paragraph"),
             ("- + Space", "Start a bullet list"),
-            ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)"),
-            ("Edit menu", "Apply the standard list spacing to every list in the deck")
+            ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)")
         ]),
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide while editing"),

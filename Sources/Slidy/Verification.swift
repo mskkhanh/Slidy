@@ -268,14 +268,21 @@ enum Verification {
             print("  after opening: modified = \(delegate.modified), undo available = \(delegate.undo.canUndo)")
             return
         }
-        if ProcessInfo.processInfo.environment["LISTSPACE"] != nil {   // the Edit menu command on the whole deck, with undo
-            let before = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
-            let changed = delegate.standardizeAllLists(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-            let after = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
-            print("  standard list spacing: \(changed) lists changed, \(before.count) list paragraphs, line heights \(Set(before.map { Int($0) }).sorted()) -> \(Set(after.map { Int($0) }).sorted())")
-            delegate.undo.undo(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-            let undone = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList }.flatMap { $0.paragraphs.filter { $0.bullet != nil }.map(\.spacing) } }
-            print("  after undo: \(Set(undone.map { Int($0) }).sorted()), restored \(zip(before, undone).allSatisfy { abs($0 - $1) < 0.5 })")
+        if ProcessInfo.processInfo.environment["AUTOLIST"] != nil {   // opening a deck applies the standard list spacing by itself
+            RunLoop.current.run(until: Date().addingTimeInterval(2.5))   // autosave has run
+            let lists = presentation.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } }
+            let standard = lists.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { p in
+                let size = Double((p.text.length > 0 ? (p.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize : nil) ?? 22)
+                return abs(p.spacing - size * Presentation.listLineFactor) < 1.5 } }
+            print("  after opening: \(lists.count) lists, all standard: \(standard), undo steps: \(delegate.undo.canUndo ? "some" : "none"), modified (not yet saved): \(delegate.modified), save failing: \(delegate.saveFailing)")
+            let saved = (try? Presentation(url: URL(fileURLWithPath: arguments[0])))?.slides.flatMap { $0.items.filter { $0.canMove && $0.hasList } } ?? []
+            print("  saved file: \(saved.count) lists, all standard: \(saved.allSatisfy { $0.paragraphs.filter { $0.bullet != nil }.allSatisfy { $0.before == 0 && $0.after == 0 } })")
+            let stamp = Presentation.modificationDate(of: URL(fileURLWithPath: arguments[0]))
+            RunLoop.current.run(until: Date().addingTimeInterval(2.5))   // no save loop: the file stays as it is
+            print("  no further saves: \(Presentation.modificationDate(of: URL(fileURLWithPath: arguments[0])) == stamp)")
+            // Showing another slide changes nothing more.
+            delegate.table.selectRowIndexes(IndexSet(integer: 4), byExtendingSelection: false); RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+            print("  after showing another slide: still saved as is: \(Presentation.modificationDate(of: URL(fileURLWithPath: arguments[0])) == stamp), modified \(delegate.modified)")
             return
         }
         if ProcessInfo.processInfo.environment["SIDEBAR"] != nil {   // ⌘B slides the left column out and in smoothly

@@ -153,6 +153,7 @@ extension AppDelegate {
         canvas.finishEditing(commit: true); index = table.selectedRow
         canvas.display(presentation.slides[index], in: presentation)
         updateStatus()
+        enforceStandardListSpacing([presentation.slides[index]])
     }
     /// ⌘E: swaps the thumbnail column for the list of recent files, and back.
     @objc func toggleRecents() {

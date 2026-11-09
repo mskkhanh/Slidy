@@ -22,7 +22,6 @@ extension AppDelegate {
         let editItem = NSMenuItem(); editItem.submenu = edit; menu.addItem(editItem)
         edit.addItem(.separator())
         edit.addItem(menuItem("Group / Ungroup Fade", #selector(toggleFadeGroup), key: "g"))
-        edit.addItem(menuItem("Apply Standard List Spacing…", #selector(applyStandardListSpacing)))
         let insert = NSMenu(title: "Insert")
         insert.addItem(menuItem("Text · T", #selector(addText))); insert.addItem(menuItem("Heading · H", #selector(addHeading))); insert.addItem(menuItem("Bullet List", #selector(addList))); insert.addItem(menuItem("Picture…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)

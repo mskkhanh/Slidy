@@ -29,6 +29,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let undo = UndoManager()
     var presentation: Presentation?
     var index = 0
+    /// True after an autosave failed (for example the file changed outside Slidy); automatic changes pause until a save works.
+    var saveFailing = false
     var modified = false {
         didSet { if modified && !oldValue, ProcessInfo.processInfo.environment["SLIDY_TRACE_MODIFIED"] != nil { fputs("MODIFIED set by:\n" + Thread.callStackSymbols.prefix(14).joined(separator: "\n") + "\n", stderr) } }
     }

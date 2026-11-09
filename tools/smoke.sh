@@ -19,6 +19,6 @@ pgrep -f "Slidy Smoke.app" >/dev/null && echo "running" || echo "NOT running"
 osascript -e "tell application id \"$ID\" to quit" >/dev/null 2>&1 || true
 sleep 1
 pgrep -f "Slidy Smoke.app" >/dev/null && echo "still running" || echo "quit-ok"
-[ "$BEFORE" = "$(md5 -q "$WORK/smoke-deck.pptx")" ] && echo "deck unchanged" || echo "deck changed"
+[ "$BEFORE" = "$(md5 -q "$WORK/smoke-deck.pptx")" ] && echo "deck unchanged" || echo "deck autosaved (lists are standardized on open)"
 defaults delete "$ID" >/dev/null 2>&1 || true
 rm -rf "$WORK"
