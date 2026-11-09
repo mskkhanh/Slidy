@@ -590,7 +590,7 @@ enum Verification {
         let panel = ShortcutsPanel()
         panel.appearance = NSAppearance(named: .aqua)   // dark text so the render is readable on white
         guard let content = panel.contentView else { return }
-        panel.setContentSize(NSSize(width: 860, height: 650))
+        panel.setContentSize(NSSize(width: 860, height: 480))
         panel.orderFront(nil); panel.layoutIfNeeded(); content.layoutSubtreeIfNeeded(); content.displayIfNeeded()
         RunLoop.current.run(until: Date().addingTimeInterval(0.3))
         guard let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
@@ -981,9 +981,14 @@ enum Verification {
             guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
             // The ⌘/ list is complete and short.
             let shortcutText = Shortcuts.sections.flatMap { $0.items }.map { "\($0.keys) \($0.action)" }
-            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘C ⌘X ⌘V", "⌘G", "⌘B", "⌘L", "⌘0", "⌘/", "⌘E", "⌘F · ⌘Enter", "Return", "Delete", "Pinch", "1 + Space", "T · H"] {
+            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘G", "⌘B", "⌘L", "⌘0", "⌘E", "⌘F · ⌘Enter", "Return", "Delete", "1 + Space", "T · H", "Double-click", "⌥-click", "Wand button"] {
                 guard shortcutText.contains(where: { $0.contains(required) }) else { throw AppError.message("Shortcut list is missing \(required)") }
             }
+            // Only Slidy's own shortcuts: the ones every Mac app has stay out, so the sheet is short.
+            for common in ["⌘C", "⌘Z", "⌘S", "⌘O", "⌘Q", "⌘X", "⌘V"] {
+                guard !shortcutText.contains(where: { $0.hasPrefix(common) }) else { throw AppError.message("The shortcut list should leave out the familiar \(common)") }
+            }
+            guard Shortcuts.sections.flatMap({ $0.items }).count <= 24 else { throw AppError.message("The shortcut list is too long") }
             guard Shortcuts.sections.flatMap({ $0.items }).allSatisfy({ $0.action.count <= 90 }) else { throw AppError.message("A shortcut description is too long") }
             // Inserted pictures get slightly rounded corners (standard roundRect) and no shadow.
             let shadowDoc = try Presentation(url: URL(fileURLWithPath: arguments[2]))

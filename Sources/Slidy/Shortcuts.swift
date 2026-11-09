@@ -2,34 +2,19 @@ import AppKit
 
 /// Single source for the shortcut list shown by ⌘/. Update it when a shortcut is added or changed.
 enum Shortcuts {
+    /// Only what is special to Slidy: the shortcuts every Mac app has (⌘C, ⌘Z, ⌘A, ⌘S, Delete, Esc...) are left out.
     static let sections: [(title: String, items: [(keys: String, action: String)])] = [
-        ("File", [
-            ("⌘O", "Open a presentation"),
-            ("⌘E", "Recent files in the left column (Esc or ⌘E to go back)"),
-            ("⌘S", "Save a copy (changes autosave to the original file)"),
-            ("⌘Q", "Quit")
-        ]),
-        ("Edit", [
-            ("⌘Z / ⇧⌘Z", "Undo / redo"),
-            ("⌘C ⌘X ⌘V", "Copy / cut / paste objects, tables, pictures (also onto another slide)"),
-            ("⌘A", "Select all objects on the slide"),
-            ("⌘G", "Group / ungroup the Fade of the selected objects"),
-            ("Delete", "Delete the selected objects (a table goes whole)")
-        ]),
         ("Objects", [
-            ("Click · ⇧-click", "Select · add or remove from the selection"),
-            ("⌥-click", "Select the object underneath (repeat to go deeper)"),
-            ("Drag · handle", "Move · resize, with snapping guides (hold ⌘ for none)"),
-            ("Double-click picture", "Crop: drag the handles, Return applies, Esc cancels"),
-            ("← ↑ ↓ →", "Nudge 1 pt (⇧ for 10 pt)"),
             ("T · H", "Add a text box · a heading"),
             ("F", "Toggle Fade (⌘A then F clears a slide)"),
             ("⇧↑ / ⇧↓", "Move the Fade earlier / later (⌥⌘↑/↓ also work)"),
+            ("⌘G", "Group / ungroup the Fade of the selected objects"),
+            ("⌥-click", "Select the object underneath (repeat to go deeper)"),
+            ("Drag · handle", "Move · resize with snapping guides (hold ⌘ for none)"),
+            ("Double-click", "On a picture: crop. Drag the handles, Return applies, Esc cancels"),
             ("Wand button", "Fade for slides that have no effect yet (top right)")
         ]),
         ("Text", [
-            ("Enter · Esc", "Edit the selected object's text · stop editing"),
-            ("⇧Enter", "New line inside a paragraph"),
             ("- + Space", "Start a bullet list"),
             ("1 + Space", "Start a numbered list (Return continues, Return on an empty item ends it)")
         ]),
@@ -38,29 +23,25 @@ enum Shortcuts {
             ("Return", "Slide list focused: add a slide after the selected one"),
             ("Delete", "Slide list focused: delete the selected slide"),
             ("⌘↑ / ⌘↓", "Slide list focused: move the selected slide up / down"),
-            ("Drag a slide", "Reorder slides in the left column")
+            ("Drag a slide", "Reorder slides in the left column"),
+            ("⌘E", "Recent files in the left column (Esc or ⌘E to go back)")
         ]),
         ("View", [
             ("⌘B", "Hide / show the left column"),
-            ("Pinch", "Zoom around the pointer (two-finger scroll pans)"),
             ("⌘0", "Fit the slide to the window"),
-            ("⌘L", "Night / light mode (display only)"),
-            ("⌘/", "This list")
+            ("⌘L", "Night / light mode (display only)")
         ]),
         ("Presenting", [
             ("⌘F · ⌘Enter", "Present from this slide (Play button, top right)"),
-            ("→ ↓ Space Enter", "Next step"),
-            ("← ↑", "Previous step"),
             ("⌫ · ⌘↑", "Previous slide, shown complete"),
-            ("⌘↓", "Next slide, shown complete"),
-            ("Esc", "Exit")
+            ("⌘↓", "Next slide, shown complete")
         ])
     ]
 }
 
 final class ShortcutsPanel: NSPanel {
     init() {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 860, height: 650), styleMask: [.titled], backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 860, height: 480), styleMask: [.titled], backing: .buffered, defer: false)
         title = "Keyboard Shortcuts"
         let heading = NSTextField(labelWithString: "Keyboard Shortcuts")
         heading.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -87,7 +68,13 @@ final class ShortcutsPanel: NSPanel {
             }
             return stack
         }
-        let split = 3
+        // Balance the two columns: pick the split whose columns have the most similar number of rows.
+        let rows = Shortcuts.sections.map { $0.items.count + 1 }
+        var split = 1, bestGap = Int.max
+        for candidate in 1..<Shortcuts.sections.count {
+            let gap = abs(rows[..<candidate].reduce(0, +) - rows[candidate...].reduce(0, +))
+            if gap < bestGap { bestGap = gap; split = candidate }
+        }
         let columns = NSStackView(views: [column(Shortcuts.sections[..<split]), column(Shortcuts.sections[split...])])
         columns.orientation = .horizontal; columns.alignment = .top; columns.spacing = 36
         let flipped = FlippedView(); flipped.translatesAutoresizingMaskIntoConstraints = false
