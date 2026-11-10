@@ -107,7 +107,7 @@ extension Presentation {
     /// Returns true when the box changed.
     @discardableResult
     func trimTextBox(_ item: SlideItem) -> Bool {
-        guard item.canMove, item.cellTextOf == nil, item.textBody != nil, item.imageURL == nil, item.fill == nil, item.stroke == nil,
+        guard item.canMove, item.textBody != nil, item.imageURL == nil, item.fill == nil, item.stroke == nil,
               item.rotation == 0, item.node.child("style") == nil,
               !item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
         let anchor = item.anchor; item.anchor = "t"
@@ -229,6 +229,7 @@ extension Presentation {
             slide.tree.insertChild(node, at: table.index + 1 + created.count)
             let item = parseItem(node, inherited: nil, rels: [:])
             item.updateFrame(cell.frame)
+            trimTextBox(item)   // hug the text, so its order badge sits right above it
             configureText(cell)
             let last = slide.items.lastIndex { $0.tableID == tableID || $0.cellTextOf == tableID } ?? (slide.items.count - 1)
             slide.items.insert(item, at: last + 1)
