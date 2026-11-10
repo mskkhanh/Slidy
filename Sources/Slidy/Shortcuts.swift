@@ -7,6 +7,7 @@ enum Shortcuts {
         ("Objects", [
             ("T · H", "Add text · heading"),
             ("F", "Toggle Fade"),
+            ("⌘B", "Bold"),
             ("⇧↑ / ⇧↓", "Reorder Fade"),
             ("⌥⌘↑ / ⌥⌘↓", "Move layer"),
             ("⌥-click", "Select underneath"),
@@ -18,7 +19,7 @@ enum Shortcuts {
             ("⌘E", "Recent files")
         ]),
         ("View", [
-            ("⌘B", "Hide sidebar"),
+            ("⌃← / ⌃→", "Hide / show sidebar"),
             ("⌘0", "Fit slide"),
             ("⌘L", "Night mode")
         ]),

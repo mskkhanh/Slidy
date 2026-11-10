@@ -687,9 +687,10 @@ final class CanvasView: NSView {
             let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
             let bullets = editor.bulletRows, numbered = editor.numberedRows
             let text = editor.plainText
-            if text != item.text || bullets != existingBullets || numbered != existingNumbered {
+            if text != item.text || bullets != existingBullets || numbered != existingNumbered || editor.boldEdited {
                 onWillEdit?()
                 presentation?.updateText(item, text: text, bulletRows: bullets, numberedRows: numbered)
+                if editor.boldEdited { presentation?.applyBold(item, flags: editor.boldFlags) }
                 if !existingBullets.isEmpty || !bullets.isEmpty { slide?.timingDirty = true }
                 onChanged?()
             }

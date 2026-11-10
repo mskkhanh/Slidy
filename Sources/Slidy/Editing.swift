@@ -135,6 +135,39 @@ extension Presentation {
         if changed { configureText(item); fitFrame(item) }
         return changed
     }
+    /// Writes bold on / off per character (`flags[paragraph][utf16 offset]`) into the runs, splitting runs where it changes.
+    func applyBold(_ item: SlideItem, flags: [[Bool]]) {
+        guard let body = item.textBody else { return }
+        for (index, paragraph) in body.all("p").enumerated() where index < flags.count {
+            let line = flags[index]
+            let runs = paragraph.elements.filter { ["r", "br", "fld"].contains($0.localName ?? "") }
+            let lengths = runs.map { $0.localName == "br" ? 1 : (($0.child("t")?.stringValue ?? "") as NSString).length }
+            guard lengths.reduce(0, +) == line.count else { continue }
+            var offset = 0
+            for (run, length) in zip(runs, lengths) {
+                defer { offset += length }
+                guard length > 0 else { continue }
+                let part = Array(line[offset..<(offset + length)])
+                func mark(_ element: XMLElement, _ bold: Bool) {
+                    let properties = element.child("rPr") ?? { let created = fragment("<a:rPr/>"); element.insertChild(created, at: 0); return created }()
+                    properties.set("b", bold ? "1" : "0")
+                }
+                if run.localName != "r" || part.allSatisfy({ $0 == part[0] }) { mark(run, part[0]); continue }
+                let text = (run.child("t")?.stringValue ?? "") as NSString
+                var position = run.index, start = 0
+                run.detach()
+                while start < length {
+                    var end = start + 1
+                    while end < length, part[end] == part[start] { end += 1 }
+                    let piece = run.copy() as! XMLElement
+                    piece.child("t")?.stringValue = text.substring(with: NSRange(location: start, length: end - start))
+                    mark(piece, part[start])
+                    paragraph.insertChild(piece, at: position); position += 1; start = end
+                }
+            }
+        }
+        configureText(item); fitFrame(item)
+    }
     static let cellTextPrefix = "Cell text "
     /// Moves the text of every cell of a table into its own text box placed exactly over the cell, so each one
     /// can fade by itself (a .pptx table can only be animated as a whole). The table keeps its grid and fills.

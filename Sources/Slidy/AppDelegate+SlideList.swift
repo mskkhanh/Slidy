@@ -38,6 +38,7 @@ extension AppDelegate {
     }
     func updateRecentSidebar() {
         recentSidebarEntries = recentPresentations
+        updateSidebarButtons()
         table.setAccessibilityLabel("Recent files")
         table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
         table.reloadData()
@@ -220,6 +221,7 @@ extension AppDelegate {
         showingRecents.toggle()
         if showingRecents { updateRecentSidebar() }
         else { showSlideList() }
+        updateSidebarButtons()
     }
     /// Removes a file from the recent list only. The file itself is never touched.
     @objc func removeRecent(_ sender: NSButton) {
@@ -231,6 +233,7 @@ extension AppDelegate {
     func showSlideList() {
         guard let presentation else { return }
         table.setAccessibilityLabel("Slides")
+        updateSidebarButtons()
         table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
         table.reloadData()
         table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)

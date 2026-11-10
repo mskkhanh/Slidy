@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let nightButton = NSButton()
     let playButton = NSButton()
     let fadeAllButton = NSButton()
+    let recentsButton = NSButton(), slidesButton = NSButton(), sidebarButton = NSButton()
     var toolbarView: NSView?
     var recentSidebarEntries: [RecentPresentation] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
@@ -72,6 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "newSlide": self?.insertSlideInDeck(after: self?.index ?? 0)
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)
+            case "sidebarHide": self?.setSidebarHidden(true)
+            case "sidebarShow": self?.setSidebarHidden(false)
             default: break
             }
         }
@@ -127,21 +130,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         emptyRecents.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(emptyRecents)
         NSLayoutConstraint.activate([
             emptyRecents.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 14), emptyRecents.widthAnchor.constraint(equalToConstant: 146),
-            emptyRecents.topAnchor.constraint(equalTo: root.topAnchor, constant: 16)
+            emptyRecents.topAnchor.constraint(equalTo: root.topAnchor, constant: 40)
         ])
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
             toolbar.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14)
         ])
+        let sidebarHeader = NSBox(); sidebarHeader.boxType = .custom; sidebarHeader.borderWidth = 0; sidebarHeader.fillColor = .black
+        sidebarHeader.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(sidebarHeader)
+        NSLayoutConstraint.activate([sidebarHeader.leadingAnchor.constraint(equalTo: scroll.leadingAnchor), sidebarHeader.trailingAnchor.constraint(equalTo: scroll.trailingAnchor), sidebarHeader.topAnchor.constraint(equalTo: root.topAnchor), sidebarHeader.bottomAnchor.constraint(equalTo: scroll.topAnchor)])
+        // Three very small buttons at the top right of the sidebar: recent files, slides, hide / show the sidebar.
+        // The last one stays on screen (top left) when the sidebar is collapsed.
+        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘E)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌃← / ⌃→)", #selector(toggleSidebar))] {
+            button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
+            button.isBordered = false; button.imagePosition = .imageOnly; button.target = self; button.action = action
+            button.contentTintColor = .tertiaryLabelColor; button.toolTip = label; button.setAccessibilityLabel(label)
+            button.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(button)
+            NSLayoutConstraint.activate([button.widthAnchor.constraint(equalToConstant: 16), button.heightAnchor.constraint(equalToConstant: 16), button.topAnchor.constraint(equalTo: root.topAnchor, constant: 6)])
+        }
+        let pinned = sidebarButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -8); pinned.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            pinned, sidebarButton.leadingAnchor.constraint(greaterThanOrEqualTo: root.leadingAnchor, constant: 8),
+            slidesButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -30),
+            recentsButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -52)
+        ])
         sidebarLeading = scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor)
         NSLayoutConstraint.activate([
             canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
-            sidebarLeading, scroll.topAnchor.constraint(equalTo: root.topAnchor), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
+            sidebarLeading, scroll.topAnchor.constraint(equalTo: root.topAnchor, constant: 28), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
             separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
-        sidebarViews = [scroll, separator]
+        sidebarViews = [scroll, separator, sidebarHeader, recentsButton, slidesButton]
         setSidebarHidden(sidebarHidden, remember: false, animated: false)
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true

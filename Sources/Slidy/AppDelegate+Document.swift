@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 extension AppDelegate {
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? { undo }
     func updateStatus() {
+        updateSidebarButtons()
         guard let presentation else { return }
         let url = savedURL ?? presentation.source
         let path = url.standardizedFileURL.path

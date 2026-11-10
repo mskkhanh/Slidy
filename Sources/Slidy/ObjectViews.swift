@@ -76,6 +76,40 @@ final class InlineTextView: NSTextView {
     var finish: ((Bool) -> Void)?
     var onTextChange: (() -> Void)?
     private var renumbering = false
+    /// Set once ⌘B changed something, so the run styles are written back when editing ends.
+    private(set) var boldEdited = false
+    private static let boldKey = NSAttributedString.Key("slidyBold")
+    private static func isBold(_ font: NSFont?) -> Bool { font.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } ?? false }
+    /// ⌘B: bold on / off for the selected text.
+    func toggleBold() {
+        let range = selectedRange()
+        guard range.length > 0, let storage = textStorage else { NSSound.beep(); return }
+        var allBold = true
+        for index in range.location..<NSMaxRange(range) where !bold(at: index) { allBold = false; break }
+        storage.beginEditing()
+        storage.enumerateAttribute(.font, in: range) { value, part, _ in
+            guard let font = value as? NSFont else { return }
+            let manager = NSFontManager.shared
+            storage.addAttribute(.font, value: allBold ? manager.convert(font, toNotHaveTrait: .boldFontMask) : manager.convert(font, toHaveTrait: .boldFontMask), range: part)
+        }
+        storage.addAttribute(Self.boldKey, value: !allBold, range: range)
+        storage.endEditing()
+        boldEdited = true
+        needsDisplay = true; onTextChange?()
+    }
+    private func bold(at index: Int) -> Bool {
+        guard let storage = textStorage, index < storage.length else { return false }
+        return (storage.attribute(Self.boldKey, at: index, effectiveRange: nil) as? Bool) ?? Self.isBold(storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont)
+    }
+    /// Bold on / off for every character of every line, list markers left out (same lines as `plainText`).
+    var boldFlags: [[Bool]] {
+        var location = 0
+        return lines.map { line in
+            let length = (line as NSString).length, skip = Self.marker(in: line)?.length ?? 0
+            defer { location += length + 1 }
+            return (skip..<length).map { bold(at: location + $0) }
+        }
+    }
     /// Slidy draws the text itself: NSTextView cuts glyphs at the top of a tight line box, which removed
     /// stacked Vietnamese accents (Ế, Ẫ) in headings. The layout manager draws them whole.
     override func draw(_ dirtyRect: NSRect) {

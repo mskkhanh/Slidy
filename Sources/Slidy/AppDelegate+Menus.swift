@@ -22,15 +22,16 @@ extension AppDelegate {
         let editItem = NSMenuItem(); editItem.submenu = edit; menu.addItem(editItem)
         edit.addItem(.separator())
         edit.addItem(menuItem("Group / Ungroup Fade", #selector(toggleFadeGroup), key: "g"))
+        edit.addItem(menuItem("Bold", #selector(toggleBold), key: "b"))
         let insert = NSMenu(title: "Insert")
         insert.addItem(menuItem("Text · T", #selector(addText))); insert.addItem(menuItem("Heading · H", #selector(addHeading))); insert.addItem(menuItem("Bullet List", #selector(addList))); insert.addItem(menuItem("Picture…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Present"); play.addItem(menuItem("From Current Slide", #selector(presentSlides), key: "f"))
         play.addItem(menuItem("Fade Slides Without Effects…", #selector(fadeAllSlides)))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
-        let view = NSMenu(title: "Xem")
+        let view = NSMenu(title: "View")
         view.addItem(menuItem("Night / Light Mode", #selector(toggleNight), key: "l"))
-        view.addItem(menuItem("Hide / Show Left Column", #selector(toggleSidebar), key: "b"))
+        view.addItem(menuItem("Hide / Show Sidebar · ⌃← / ⌃→", #selector(toggleSidebar)))
         view.addItem(menuItem("Fit to Window", #selector(fitZoom), key: "0"))
         let viewItem = NSMenuItem(); viewItem.submenu = view; menu.addItem(viewItem)
         let help = NSMenu(title: "Help")
@@ -55,9 +56,32 @@ extension AppDelegate {
     }
     @objc func fitZoom() { canvas.resetZoom() }
     @objc func toggleSidebar() { setSidebarHidden(!sidebarHidden) }
+    @objc func showRecentFiles() { if presentation != nil, !showingRecents { toggleRecents() } }
+    @objc func showSlides() { if presentation != nil, showingRecents { toggleRecents() } }
+    /// The small sidebar buttons: the list that is showing is brighter.
+    func updateSidebarButtons() {
+        recentsButton.contentTintColor = recentsMode ? .labelColor : .tertiaryLabelColor
+        slidesButton.contentTintColor = recentsMode ? .tertiaryLabelColor : .labelColor
+        sidebarButton.contentTintColor = sidebarHidden ? .secondaryLabelColor : .tertiaryLabelColor
+    }
+    /// ⌘B: bold on / off for the selected text while editing, or for the whole text of the selected objects.
+    @objc func toggleBold() {
+        if let editor = canvas.editor { editor.toggleBold(); return }
+        guard let presentation, !busy else { return }
+        let items = canvas.selection.filter { $0.textBody != nil && !$0.text.isEmpty && !$0.inherited }
+        guard !items.isEmpty else { NSSound.beep(); return }
+        func bold(_ paragraph: Paragraph) -> [Bool] {
+            (0..<paragraph.text.length).map { ((paragraph.text.attribute(.font, at: $0, effectiveRange: nil) as? NSFont).map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) }) ?? false }
+        }
+        let allBold = items.allSatisfy { $0.paragraphs.allSatisfy { bold($0).allSatisfy { $0 } } }
+        checkpoint()
+        for item in items { presentation.applyBold(item, flags: item.paragraphs.map { Array(repeating: !allBold, count: $0.text.length) }) }
+        canvas.rebuild(); didChange()
+    }
     /// ⌘B: the left column slides out to the left (and back in) while the slide area grows and shrinks with it.
     func setSidebarHidden(_ hidden: Bool, remember: Bool = true, animated: Bool = true) {
         sidebarHidden = hidden
+        updateSidebarButtons()
         emptyRecents.isHidden = hidden || !(recentsMode && recentSidebarEntries.isEmpty)
         if remember { UserDefaults.standard.set(hidden, forKey: "sidebarHidden") }
         let target: CGFloat = hidden ? -Self.sidebarOffset : 0
