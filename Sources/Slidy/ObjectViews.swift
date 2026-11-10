@@ -40,7 +40,7 @@ final class ObjectView: NSView {
         else if item.geometry == "roundRect" { path = NSBezierPath(roundedRect: bounds, xRadius: min(bounds.height / 2, 14), yRadius: min(bounds.height / 2, 14)) }
         else { path = NSBezierPath(rect: bounds) }
         let night = canvas?.nightActive ?? false
-        if let fill = item.fill { (night ? NightMode.surface(fill) : fill).setFill(); path.fill() }
+        if let fill = item.fill { (night ? NightMode.fill(fill, on: canvas?.slide?.background) : fill).setFill(); path.fill() }
         if let stroke = item.stroke { (night ? NightMode.ink(stroke) : stroke).setStroke(); path.lineWidth = item.strokeWidth; path.stroke() }
         if let image = presentation.image(for: item) {
             // Rounded pictures are clipped to their rounded outline; the layer shadow then follows that shape.

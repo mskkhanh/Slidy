@@ -386,6 +386,8 @@ enum Verification {
             print("  report: \(AppDelegate.tidyReport(first).replacingOccurrences(of: "\n", with: " | "))")
             let second = delegate.tidyDeck(presentation)
             print("  second run: \(second.trimmed) trimmed, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")
+            let nightBefore = NightMode.isOn; defer { NightMode.isOn = nightBefore }
+            if ProcessInfo.processInfo.environment["NIGHT"] != nil { NightMode.isOn = true }
             delegate.canvas.display(presentation.slides[slideIndex], in: presentation); delegate.canvas.showsOrderBadges = true; delegate.canvas.updateOrderBadges(); delegate.canvas.displayIfNeeded()
             if let bitmap = delegate.canvas.bitmapImageRepForCachingDisplay(in: delegate.canvas.bounds) {   // the slide with its order badges, to look at
                 delegate.canvas.cacheDisplay(in: delegate.canvas.bounds, to: bitmap)
