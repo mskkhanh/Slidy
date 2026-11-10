@@ -98,9 +98,14 @@ extension AppDelegate {
         else { selection.forEach { slide.removeFade(from: $0) } }
         didChange()
     }
-    /// Slides the wand button will touch: those with objects but no Fade at all. Slides you animated yourself are left alone.
+    /// Slides the wand button will touch: those where nothing was animated by hand. A list fades by itself as soon as it
+    /// exists, so a slide whose only effects are on lists still counts as untouched (otherwise its heading and text
+    /// would be left without a Fade). Slides where you gave any other object a Fade are left alone.
     func slidesWithoutEffects(in presentation: Presentation) -> [Slide] {
-        presentation.slides.filter { $0.fadeGroups.isEmpty && $0.items.contains(where: \.canMove) }
+        presentation.slides.filter { slide in
+            let movable = slide.items.filter(\.canMove)
+            return !movable.isEmpty && !slide.items.contains { $0.canFade && $0.hasFade && !$0.hasList } && movable.contains { !$0.hasFade }
+        }
     }
     /// Gives every movable object of `slides` a Fade, numbered from the top of the slide downwards.
     func applyFade(toTopToBottom slides: [Slide]) {
