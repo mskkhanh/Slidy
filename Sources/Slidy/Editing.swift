@@ -80,6 +80,20 @@ extension Presentation {
         }
         configureText(item)
         fitFrame(item)
+        growTextBox(item)
+    }
+    /// A plain text box (no fill, no outline) whose text no longer fits gets taller, so its frame always surrounds the text.
+    func growTextBox(_ item: SlideItem) {
+        guard !item.autoFit, item.canMove, item.textBody != nil, item.fill == nil, item.stroke == nil, item.node.child("style") == nil else { return }
+        let anchor = item.anchor; item.anchor = "t"
+        let layouts = layoutParagraphs(item)
+        item.anchor = anchor
+        let used = ceil((layouts.last.map { $0.origin.y + $0.height } ?? item.insets.top) + item.insets.bottom)
+        guard used > item.frame.height + 1 else { return }
+        var frame = item.frame
+        if anchor == "ctr" { frame.origin.y -= (used - frame.height) / 2 } else if anchor == "b" { frame.origin.y -= used - frame.height }
+        frame.size.height = used
+        item.updateFrame(frame)
     }
     /// Makes the box of an auto-fit text object hug its text: as wide as the longest line (up to the right margin)
     /// and as tall as its lines. Other boxes are left exactly as they are.
@@ -137,8 +151,16 @@ extension Presentation {
         let height = min(frame.height, max(12, ceil(used)))
         if anchor == "ctr" { frame.origin.y += (frame.height - height) / 2 } else if anchor == "b" { frame.origin.y += frame.height - height }
         frame.size.height = height
-        guard item.frame.width - frame.width >= 2 || item.frame.height - frame.height >= 2 else { return false }
-        item.updateFrame(frame)
+        // A one-line, left-aligned box becomes auto-fit, so it grows again when more text is typed.
+        var madeAutoFit = false
+        if !wraps, !item.autoFit, anchor == "t", alignments == [.left] || alignments == [.natural], let bodyPr = item.textBody?.child("bodyPr") {
+            for name in ["normAutofit", "noAutofit", "spAutoFit"] { bodyPr.child(name)?.detach() }
+            bodyPr.addChild(fragment("<a:spAutoFit/>"))
+            item.autoFit = true; madeAutoFit = true
+        }
+        let shrinks = item.frame.width - frame.width >= 2 || item.frame.height - frame.height >= 2
+        guard shrinks || madeAutoFit else { return false }
+        if shrinks { item.updateFrame(frame) }
         return true
     }
     /// Switches a text object to auto-fit and sizes it to its text.

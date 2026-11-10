@@ -539,6 +539,21 @@ enum Verification {
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             return
         }
+        if ProcessInfo.processInfo.environment["GROW"] != nil {   // typing more text: the frame grows with it
+            let slide = presentation.slides[slideIndex]
+            _ = delegate.tidyDeck(presentation)
+            for item in slide.items where item.canMove && item.fill == nil && !item.text.isEmpty {
+                let before = item.frame
+                delegate.canvas.selected = item; delegate.canvas.startEditing()
+                delegate.canvas.editor?.insertText(" thêm rất nhiều chữ nữa để dòng này dài hơn hẳn khung cũ và phải xuống hàng thêm vài lần nữa cho chắc chắn", replacementRange: NSRange(location: (delegate.canvas.editor?.string as NSString?)?.length ?? 0, length: 0))
+                delegate.canvas.finishEditing(commit: true)
+                let layouts = layoutParagraphs(item)
+                let bottom = (layouts.last.map { $0.origin.y + $0.height } ?? 0)
+                print("  \(item.autoFit ? "auto-fit" : "fixed   ") \"\(item.text.prefix(12))\": \(Int(before.width))×\(Int(before.height)) -> \(Int(item.frame.width))×\(Int(item.frame.height)); text ends at \(Int(bottom)) (inside: \(bottom <= item.frame.height + 1))")
+            }
+            for _ in 0..<30 where delegate.undo.canUndo { delegate.undo.undo() }
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
