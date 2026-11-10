@@ -39,8 +39,9 @@ final class CanvasView: NSView {
     }
     /// The objects that are selected together with `item`: all cells of its table, or the object itself.
     func members(of item: SlideItem) -> [SlideItem] {
-        guard let id = item.tableID, let slide else { return [item] }
-        return slide.items.filter { $0.tableID == id }
+        guard let id = item.tableID ?? item.cellTextOf, let slide else { return [item] }
+        let group = slide.items.filter { $0.tableID == id || $0.cellTextOf == id }   // a table with the texts split out of its cells
+        return group.contains(where: \.isTableCell) ? group : [item]
     }
     /// ⌘A on the slide: selects every movable object.
     override func selectAll(_ sender: Any?) {
@@ -156,15 +157,20 @@ final class CanvasView: NSView {
         if presenting {
             let views = Dictionary(uniqueKeysWithValues: objectViews.map { (ObjectIdentifier($0.item), $0) })
             fadeSteps = slide.fadeSequence.map { step in
-                step.compactMap { entry -> (NSView, Double)? in
-                    guard let object = views[ObjectIdentifier(entry.item)] else { return nil }
+                step.flatMap { entry -> [(NSView, Double)] in
+                    guard let object = views[ObjectIdentifier(entry.item)] else { return [] }
+                    if entry.item.isTableFrame {   // the whole table: all of its cells appear together
+                        let cellViews = objectViews.filter { $0.item.tableID == entry.item.tableID }
+                        cellViews.forEach { $0.alphaValue = 0 }
+                        return cellViews.map { ($0 as NSView, entry.item.fadeDuration(for: nil)) }
+                    }
                     let view: NSView
                     if let paragraph = entry.paragraph,
                        let index = entry.item.paragraphs.firstIndex(where: { $0.xmlIndex == paragraph }) {
                         view = object.paragraphViews[index]
                     } else { view = object }
                     view.alphaValue = 0
-                    return (view, entry.item.fadeDuration(for: entry.paragraph))
+                    return [(view, entry.item.fadeDuration(for: entry.paragraph))]
                 }
             }
         }
@@ -298,7 +304,7 @@ final class CanvasView: NSView {
         if !selection.isEmpty, !presenting, editor == nil, cropItem == nil {
             var outlines: [CGRect] = [], tableIndex: [String: Int] = [:]
             for item in selection {   // a selected table is one outline, not one per cell
-                if let id = item.tableID {
+                if let id = item.tableID ?? item.cellTextOf.flatMap({ table in selection.contains { $0.tableID == table } ? table : nil }) {
                     if let at = tableIndex[id] { outlines[at] = outlines[at].union(item.frame) } else { tableIndex[id] = outlines.count; outlines.append(item.frame) }
                 } else { outlines.append(item.frame) }
             }
@@ -374,7 +380,7 @@ final class CanvasView: NSView {
         guard target.canMove || target.isTableCell else { return }
         dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
         // Several objects, or a table (all its cells), are dragged together from their starting frames.
-        let movesTogether = keepsMultiSelection || target.isTableCell
+        let movesTogether = keepsMultiSelection || target.isTableCell || (target.cellTextOf != nil && selection.count > 1)
         let moving = selection.filter { $0.canMove || $0.isTableCell }
         dragFrames = movesTogether ? Dictionary(uniqueKeysWithValues: moving.map { (ObjectIdentifier($0), $0.frame) }) : [:]
         dragTables = []

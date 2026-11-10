@@ -49,6 +49,11 @@ final class SlideItem {
     /// Outer shadow (<a:outerShdw>) of a picture or shape, drawn under the object.
     var shadow: ObjectShadow?
     var tableID: String?
+    /// The table itself (its <p:graphicFrame>), kept as an invisible first "cell" so the whole table can carry a Fade.
+    var isTableFrame = false
+    /// A text box that holds the text of a table cell (split out so it can fade by itself): the table's id.
+    var cellTextOf: String?
+    var canFade: Bool { canMove || isTableFrame }
     var inherited = false
     private static let fadeOffURI = "urn:slidepresent:fade-off"
     private var fadeOffMarker: XMLElement? {
@@ -109,7 +114,7 @@ final class Slide {
     }
     var fadeGroups: [[SlideItem]] {
         let ordered = items.enumerated().filter {
-            $0.element.canMove && $0.element.hasFade
+            $0.element.canFade && $0.element.hasFade
         }.sorted { ($0.element.order, $0.offset) < ($1.element.order, $1.offset) }
         var groups: [[SlideItem]] = []
         var positions: [String: Int] = [:]

@@ -232,6 +232,7 @@ final class Presentation {
         }
         if let crop = node.descendant("srcRect") { item.imageCrop = NSEdgeInsets(top: crop.number("t") / 100000, left: crop.number("l") / 100000, bottom: crop.number("b") / 100000, right: crop.number("r") / 100000) }
         configureText(item, inherited: inherited)
+        if let name = node.descendant("cNvPr")?.attr("name"), name.hasPrefix(Presentation.cellTextPrefix) { item.cellTextOf = String(name.dropFirst(Presentation.cellTextPrefix.count)) }
         return item
     }
     func configureText(_ item: SlideItem, inherited: XMLElement? = nil) {
@@ -280,6 +281,10 @@ final class Presentation {
         var y = (transform.child("off")?.number("y") ?? 0) / emu
         let widths = table.child("tblGrid")?.all("gridCol").map { $0.number("w") / emu } ?? []
         var items: [SlideItem] = []
+        let tableID = node.descendant("cNvPr")?.attr("id") ?? "table"
+        let whole = SlideItem(node: node, id: tableID, frame: .zero)
+        whole.isTableCell = true; whole.isTableFrame = true; whole.tableNode = node; whole.tableID = tableID
+        items.append(whole)
         for row in table.all("tr") {
             var x = startX; let height = row.number("h") / emu
             for (index, cell) in row.all("tc").enumerated() {
@@ -295,6 +300,8 @@ final class Presentation {
             }
             y += height
         }
+        whole.frame = items.dropFirst().reduce(CGRect.null) { $0.union($1.frame) }
+        if whole.frame.isNull { whole.frame = .zero }
         return items
     }
     /// Writes a picture's crop as the standard <a:srcRect> (fractions of the whole picture cut from each side).

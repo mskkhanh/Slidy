@@ -429,6 +429,47 @@ enum Verification {
             print("  after undo: \(names(presentation.slides[slideIndex]))")
             return
         }
+        if ProcessInfo.processInfo.environment["TABLEFADE"] != nil {   // F on a table: the table first, then each cell's text, row by row
+            let slide = presentation.slides[slideIndex]
+            guard let cell = slide.items.first(where: { $0.isTableCell && !$0.isTableFrame }), let id = cell.tableID else { print("  no table on this slide"); return }
+            func shot() -> NSBitmapImageRep? {
+                delegate.canvas.select([]); delegate.canvas.showsOrderBadges = false; delegate.canvas.updateOrderBadges(); delegate.canvas.displayIfNeeded()
+                guard let bitmap = delegate.canvas.bitmapImageRepForCachingDisplay(in: delegate.canvas.bounds) else { return nil }
+                delegate.canvas.cacheDisplay(in: delegate.canvas.bounds, to: bitmap); delegate.canvas.showsOrderBadges = true; return bitmap
+            }
+            func differing(_ a: NSBitmapImageRep?, _ b: NSBitmapImageRep?) -> Int {
+                guard let a, let b, a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh, let x = a.bitmapData, let y = b.bitmapData else { return -1 }
+                var count = 0; let length = a.bytesPerRow * a.pixelsHigh
+                for i in stride(from: 0, to: length, by: 4) where abs(Int(x[i]) - Int(y[i])) + abs(Int(x[i+1]) - Int(y[i+1])) + abs(Int(x[i+2]) - Int(y[i+2])) > 24 { count += 1 }
+                return count
+            }
+            func sequence(_ s: Slide) -> String { s.fadeSequence.map { step in step.map { $0.item.isTableFrame ? "TABLE" : "\"\($0.item.text.prefix(14))\"" }.joined(separator: "+") }.joined(separator: " > ") }
+            let cellTexts = slide.items.filter { $0.tableID == id && !$0.isTableFrame }.map(\.text).filter { !$0.isEmpty }
+            let before = shot()
+            if let png = before?.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: arguments[0] + ".before.png")) }
+            delegate.canvas.select(delegate.canvas.members(of: cell))
+            print("  table selected: \(delegate.canvas.selection.count) items; \(cellTexts.count) cells with text; effects before: \(sequence(slide))")
+            delegate.toggleSelectedFade()
+            let boxes = slide.items.filter { $0.cellTextOf == id }
+            print("  after F: \(boxes.count) text boxes, cells still holding text \(slide.items.filter { $0.tableID == id && !$0.text.isEmpty }.count), same texts in order \(boxes.sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }.map(\.text) == cellTexts)")
+            print("  order: \(sequence(slide))")
+            let after = shot()
+            if let png = after?.representation(using: .png, properties: [:]) { try? png.write(to: URL(fileURLWithPath: arguments[0] + ".after.png")) }
+            print("  picture of the slide: \(differing(before, after)) pixels differ")
+            if let box = boxes.first { delegate.canvas.select(delegate.canvas.members(of: box)); print("  clicking a cell text selects the group: \(delegate.canvas.selection.count) items (table + texts)") }
+            RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+            if let saved = try? Presentation(url: URL(fileURLWithPath: arguments[0])) {
+                let s = saved.slides[slideIndex]
+                print("  saved file: order \(sequence(s))")
+                print("  saved file: text boxes \(s.items.filter { $0.cellTextOf == id }.count), timing targets \(s.document.xmlString.components(separatedBy: "<p:spTgt").count - 1)")
+            }
+            delegate.canvas.select(delegate.canvas.members(of: cell)); delegate.toggleSelectedFade()
+            print("  F again: \(sequence(slide).isEmpty ? "no effects on the table" : sequence(slide)); text boxes kept \(slide.items.filter { $0.cellTextOf == id }.count)")
+            for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
+            let restored = presentation.slides[slideIndex]
+            print("  after undo: text boxes \(restored.items.filter { $0.cellTextOf == id }.count), cell texts back \(restored.items.filter { $0.tableID == id && !$0.isTableFrame }.map(\.text).filter { !$0.isEmpty } == cellTexts), picture differs by \(differing(before, shot())) pixels")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

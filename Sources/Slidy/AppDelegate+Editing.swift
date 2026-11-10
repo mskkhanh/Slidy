@@ -57,10 +57,39 @@ extension AppDelegate {
         } catch { showError(error) }
     }
     func toggleSelectedFade() {
+        var tables: [String] = []
+        for item in canvas.selection { if let id = item.tableID, !tables.contains(id) { tables.append(id) } }
+        if !tables.isEmpty { toggleTableFade(tables); return }
         let selection = canvas.selection.filter(\.canMove)
         guard !busy, !selection.isEmpty else { return }
         // F toggles: if every selected object already has Fade, remove it from all of them; otherwise add Fade.
         setFade(for: selection, enabled: !selection.allSatisfy(\.hasFade))
+    }
+    /// F on a table: the table (grid and fills) fades in first, then the text of each cell, left to right and top to bottom.
+    /// A .pptx table can only be animated as a whole, so each cell's text moves into its own text box over the cell.
+    /// F again removes those effects (the text boxes stay).
+    func toggleTableFade(_ tables: [String]) {
+        guard !busy, let presentation, let slide = canvas.slide, permitTimingEdit() else { return }
+        canvas.finishEditing(commit: true)
+        checkpoint()
+        var reselect: [SlideItem] = []
+        for id in tables {
+            guard let whole = slide.items.first(where: { $0.isTableFrame && $0.tableID == id }) else { continue }
+            if whole.hasFade {
+                slide.removeFade(from: whole)
+                slide.items.filter { $0.cellTextOf == id }.forEach { slide.removeFade(from: $0) }
+            } else {
+                presentation.splitCellText(ofTable: id, in: slide)
+                let texts = slide.items.filter { $0.cellTextOf == id }.sorted { ($0.frame.minY, $0.frame.minX) < ($1.frame.minY, $1.frame.minX) }
+                texts.forEach { slide.removeFade(from: $0) }
+                slide.applyFade(to: [whole])
+                texts.forEach { slide.applyFade(to: [$0]); $0.fadeGroup = UUID().uuidString }   // one step per cell, even for a list
+            }
+            reselect += slide.items.filter { $0.tableID == id || $0.cellTextOf == id }
+        }
+        slide.normalizeFadeOrder()
+        canvas.rebuild(); canvas.select(reselect)
+        didChange()
     }
     func setFade(for selection: [SlideItem], enabled: Bool) {
         guard !busy, !selection.isEmpty, let slide = canvas.slide, permitTimingEdit() else { return }
@@ -157,7 +186,7 @@ extension AppDelegate {
         for item in slide.items {
             if let at = unitIndex[key(item)] { units[at].append(item) } else { unitIndex[key(item)] = units.count; units.append([item]) }
         }
-        func movable(_ unit: [SlideItem]) -> Bool { unit[0].canMove || unit[0].isTableCell }
+        func movable(_ unit: [SlideItem]) -> Bool { unit[0].canMove || unit[0].isTableCell }   // a table starts with its frame item
         let selectedKeys = Set(canvas.selection.map(key))
         var chosen = units.indices.filter { selectedKeys.contains(key(units[$0][0])) && movable(units[$0]) }
         guard !chosen.isEmpty else { return }
