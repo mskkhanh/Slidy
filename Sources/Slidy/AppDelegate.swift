@@ -145,6 +145,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         setSidebarHidden(sidebarHidden, remember: false, animated: false)
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true
+        canvas.onMoveLayer = { [weak self] delta in self?.moveLayer(by: delta) }
         canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
         canvas.onOpenFile = { [weak self] in self?.openFile() }
         canvas.onWillEdit = { [weak self] in self?.checkpoint() }

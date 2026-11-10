@@ -124,7 +124,7 @@ extension AppDelegate {
         slide.normalizeFadeOrder(); slide.timingDirty = true
         didChange()
     }
-    /// ⌥⌘↑ / ⌥⌘↓ on the slide: move the selected objects' Fade effects one step earlier / later.
+    /// ⇧↑ / ⇧↓ on the slide: move the selected objects' Fade effects one step earlier / later.
     func reorderFade(by delta: Int) {
         guard !busy, let slide = canvas.slide else { return }
         let groups = slide.fadeGroups
@@ -145,15 +145,42 @@ extension AppDelegate {
         }
         return true
     }
-    @objc func bringForward() { reorder(forward: true) }
-    @objc func sendBackward() { reorder(forward: false) }
-    func reorder(forward: Bool) {
-        guard let item = canvas.selected, let slide = canvas.slide, item.canMove, let position = slide.items.firstIndex(where: { $0 === item }) else { return }
-        let next = position + (forward ? 1 : -1)
-        guard slide.items.indices.contains(next), slide.items[next].canMove else { return }
-        checkpoint(); let other = slide.items[next].node; let nodeIndex = other.index
-        item.node.detach(); slide.tree.insertChild(item.node, at: forward ? nodeIndex : nodeIndex)
-        slide.items.swapAt(position, next); canvas.rebuild(); didChange()
+    @objc func bringForward() { moveLayer(by: 1) }
+    @objc func sendBackward() { moveLayer(by: -1) }
+    /// ⌥⌘↑ / ⌥⌘↓: moves the selected objects one layer forward / backward (one step per press).
+    /// A table moves as one unit with all of its cells.
+    func moveLayer(by delta: Int) {
+        guard !busy, let slide = canvas.slide, !canvas.selection.isEmpty else { return }
+        func key(_ item: SlideItem) -> ObjectIdentifier { ObjectIdentifier(item.tableNode ?? item.node) }
+        var units: [[SlideItem]] = []
+        var unitIndex: [ObjectIdentifier: Int] = [:]
+        for item in slide.items {
+            if let at = unitIndex[key(item)] { units[at].append(item) } else { unitIndex[key(item)] = units.count; units.append([item]) }
+        }
+        func movable(_ unit: [SlideItem]) -> Bool { unit[0].canMove || unit[0].isTableCell }
+        let selectedKeys = Set(canvas.selection.map(key))
+        var chosen = units.indices.filter { selectedKeys.contains(key(units[$0][0])) && movable(units[$0]) }
+        guard !chosen.isEmpty else { return }
+        if delta > 0 { chosen.reverse() }
+        var moves: [(from: Int, to: Int)] = []
+        var order = Array(units.indices)   // current stacking order of unit ids
+        for unit in chosen {
+            guard let at = order.firstIndex(of: unit) else { continue }
+            var next = at + (delta > 0 ? 1 : -1)
+            while order.indices.contains(next), !movable(units[order[next]]) { next += delta > 0 ? 1 : -1 }
+            guard order.indices.contains(next), !selectedKeys.contains(key(units[order[next]][0])) else { continue }
+            moves.append((unit, order[next])); order.swapAt(at, next)
+        }
+        guard !moves.isEmpty else { return }
+        checkpoint()
+        func node(_ unit: [SlideItem]) -> XMLElement { unit[0].tableNode ?? unit[0].node }
+        for move in moves {
+            let mine = node(units[move.from]), other = node(units[move.to])
+            mine.detach()
+            slide.tree.insertChild(mine, at: delta > 0 ? other.index + 1 : other.index)
+        }
+        slide.items = order.flatMap { units[$0] }
+        canvas.rebuild(); didChange()
     }
     /// Delete: removes every selected object. A selected table (any of its cells) goes as a whole.
     @objc func deleteObject() {

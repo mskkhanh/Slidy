@@ -8,6 +8,7 @@ enum Shortcuts {
             ("T · H", "Add text · heading"),
             ("F", "Toggle Fade"),
             ("⇧↑ / ⇧↓", "Reorder Fade"),
+            ("⌥⌘↑ / ⌥⌘↓", "Move layer"),
             ("⌥-click", "Select underneath"),
             ("Wand button", "Auto Fade")
         ]),

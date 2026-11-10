@@ -20,6 +20,7 @@ final class CanvasView: NSView {
     var usesNightMode = false
     var nightActive: Bool { usesNightMode && NightMode.isOn && !presenting }
     var onReorderFade: ((Int) -> Void)?
+    var onMoveLayer: ((Int) -> Void)?
     var onJumpSlide: ((Int) -> Void)?
     private var badgeViews: [OrderBadgeView] = []
     private(set) var selection: [SlideItem] = []
@@ -515,9 +516,11 @@ final class CanvasView: NSView {
     }
     /// Builds the inline editor so its text sits exactly where the rendered text is: same insets, indents,
     /// line height, alignment, vertical anchor and run styles. Bullets are shown as "•<tab>" lines.
+    static let editorPad: CGFloat = 16
     func makeEditor(for item: SlideItem) -> InlineTextView {
         let night = nightActive
-        let view = InlineTextView(frame: item.frame)
+        // The editor starts `editorPad` above the object: stacked accents (Ế, Ẫ) rise above a tight line box and would be cut off.
+        let view = InlineTextView(frame: CGRect(x: item.frame.minX, y: item.frame.minY - Self.editorPad, width: item.frame.width, height: item.frame.height + Self.editorPad))
         view.isRichText = true; view.importsGraphics = false; view.usesFontPanel = false; view.usesRuler = false
         view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
         view.isAutomaticSpellingCorrectionEnabled = false; view.allowsUndo = true
@@ -555,7 +558,7 @@ final class CanvasView: NSView {
         view.backgroundColor = editorBackground
         view.insertionPointColor = (firstAttributes[.foregroundColor] as? NSColor) ?? fallbackColor
         let top = layoutParagraphs(item, night: night).first?.origin.y ?? item.insets.top
-        view.textContainerInset = CGSize(width: item.insets.left, height: top)
+        view.textContainerInset = CGSize(width: item.insets.left, height: top + Self.editorPad)
         view.textContainer?.lineFragmentPadding = 0
         view.textContainer?.widthTracksTextView = false
         view.textContainer?.containerSize = CGSize(width: max(1, item.frame.width - item.insets.left - item.insets.right), height: 100000)
@@ -627,10 +630,17 @@ final class CanvasView: NSView {
             line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
             x = line.minX + manager.location(forGlyphAt: glyph).x
         }
-        let fontSize = (editor.typingAttributes[.font] as? NSFont)?.pointSize ?? 24
-        let height = min(line.height, fontSize * 1.25)
+        // The caret hugs the text: it runs from the font's ascent above the baseline to its descent below it,
+        // wherever the (taller) line box leaves the extra space.
+        let font = (editor.typingAttributes[.font] as? NSFont) ?? .systemFont(ofSize: 24)
+        var baseline = line.minY + line.height - font.descender * -1 - (line.height - font.ascender + font.descender) / 2
+        if length > 0 {
+            let glyph = manager.glyphIndexForCharacter(at: min(max(0, selection.location), length - 1))
+            if manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil) == line { baseline = line.minY + manager.location(forGlyphAt: glyph).y }
+        } else { baseline = line.minY + line.height + font.descender }
+        let height = font.ascender - font.descender
         let origin = editor.textContainerOrigin
-        let local = CGRect(x: origin.x + x, y: origin.y + line.minY + (line.height - height) / 2, width: 1.5, height: height)
+        let local = CGRect(x: origin.x + x, y: origin.y + baseline - font.ascender, width: 1.5, height: height)
         overlay.caret = surface.convert(local, from: editor)
         hideSystemCaret()
         if restartBlink { overlay.caretOn = true }
@@ -734,11 +744,15 @@ final class CanvasView: NSView {
             }
             return
         }
-        // Fade order: ⇧↑ / ⇧↓ (⌥⌘↑ / ⌥⌘↓ still work). ⌘↑ / ⌘↓ switch slides, so they are not used here.
+        // Layers: ⌥⌘↑ / ⌥⌘↓ move the selection one step. Fade order: ⇧↑ / ⇧↓. (⌘↑ / ⌘↓ switch slides.)
         // On objects without Fade, ⇧↑ / ⇧↓ keep nudging by 10 points.
         let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let hasFadeSelected = selection.contains { $0.canMove && $0.hasFade }
-        if [125, 126].contains(event.keyCode), flags == [.command, .option] || (flags == .shift && hasFadeSelected) {
+        if [125, 126].contains(event.keyCode), flags == [.command, .option], !selection.isEmpty {
+            if !event.isARepeat { onMoveLayer?(event.keyCode == 126 ? 1 : -1) }
+            return
+        }
+        if [125, 126].contains(event.keyCode), flags == .shift && hasFadeSelected {
             if !event.isARepeat { onReorderFade?(event.keyCode == 126 ? -1 : 1) }
             return
         }

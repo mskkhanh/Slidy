@@ -409,6 +409,26 @@ enum Verification {
             print("  after undo: cells back where they were: \(zip(before, back.map(\.frame)).allSatisfy { abs($0.minX - $1.minX) < 0.6 && abs($0.minY - $1.minY) < 0.6 })")
             return
         }
+        if ProcessInfo.processInfo.environment["LAYER"] != nil {   // ⌥⌘↑ / ⌥⌘↓ move the selected object one layer per press
+            let slide = presentation.slides[slideIndex]
+            func names(_ s: Slide) -> String { var seen: [String] = []; for item in s.items where item.canMove || item.isTableCell { let k = item.tableID.map { "table\($0)" } ?? item.id; if seen.last != k { seen.append(k) } }; return seen.joined(separator: " ") }
+            func xmlOrder(_ s: Slide) -> String { (s.tree.children ?? []).compactMap { ($0 as? XMLElement) }.filter { ["sp", "pic", "graphicFrame"].contains($0.localName ?? "") }.compactMap { $0.descendant("cNvPr")?.attr("id") }.joined(separator: " ") }
+            guard let target = slide.items.first(where: \.canMove) else { print("  nothing movable"); return }
+            let n = delegate.window.windowNumber
+            func arrow(_ code: UInt16) { delegate.window.makeFirstResponder(delegate.canvas); delegate.canvas.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .option], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!) }
+            delegate.canvas.selected = target
+            print("  start:      \(names(slide)) | xml \(xmlOrder(slide)) | selected \(target.id)")
+            arrow(126); print("  ⌥⌘↑ once:   \(names(slide)) | xml \(xmlOrder(slide))")
+            arrow(126); print("  ⌥⌘↑ twice:  \(names(slide)) | xml \(xmlOrder(slide))")
+            arrow(125); print("  ⌥⌘↓ once:   \(names(slide)) | xml \(xmlOrder(slide))")
+            for _ in 0..<20 { arrow(126) }; print("  ⌥⌘↑ ×20:    \(names(slide)) (stops on top)")
+            RunLoop.current.run(until: Date().addingTimeInterval(2.0))
+            let saved = try? Presentation(url: URL(fileURLWithPath: arguments[0]))
+            print("  saved file: \(saved.map { names($0.slides[slideIndex]) } ?? "unreadable")")
+            for _ in 0..<30 where delegate.undo.canUndo { delegate.undo.undo() }
+            print("  after undo: \(names(presentation.slides[slideIndex]))")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
@@ -626,6 +646,15 @@ enum Verification {
                 canvas.selected = item; canvas.startCrop(item)
                 canvas.cropFrame = CGRect(x: item.frame.minX + 40, y: item.frame.minY + 30, width: item.frame.width - 130, height: item.frame.height - 90)
             }
+            if ProcessInfo.processInfo.environment["HEADSNAP"] != nil {   // a heading with stacked Vietnamese accents, shown and edited
+                let heading = document.addText(to: slide, list: false, heading: true)
+                document.updateText(heading, text: "TIẾP TỤC Ầ Ẩ Ẫ Ệ")
+                canvas.rebuild()
+                if ProcessInfo.processInfo.environment["HEADSNAP"] == "edit" { canvas.selected = heading; canvas.startEditing(); }
+                if ProcessInfo.processInfo.environment["HEADSNAP"] == "list", let list = slide.items.first(where: { $0.canMove && $0.hasList }) {
+                    canvas.selected = list; canvas.startEditing(); canvas.editor?.setSelectedRange(NSRange(location: 8, length: 0)); canvas.updateCaret(restartBlink: true)
+                }
+            }
             canvas.displayIfNeeded()
             guard let bitmap = canvas.bitmapImageRepForCachingDisplay(in: canvas.bounds) else { return }
             canvas.cacheDisplay(in: canvas.bounds, to: bitmap)
@@ -666,11 +695,12 @@ enum Verification {
                 }
             }
             let originalTexts = document.slides.map { $0.items.map(\.text) }
+            let originalCells = document.slides.flatMap(\.items).filter(\.isTableCell).count
             let untouched = output.appendingPathComponent("unchanged.pptx")
             try document.save(to: untouched)
             let unchanged = try Presentation(url: untouched)
             guard unchanged.slides.map({ $0.items.map(\.text) }) == originalTexts,
-                  unchanged.slides.flatMap(\.items).filter(\.isTableCell).count == 26 else {
+                  unchanged.slides.flatMap(\.items).filter(\.isTableCell).count == originalCells else {
                 throw AppError.message("Unedited text/table preservation failed")
             }
             let node = fragment("<p:sp><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr b=\"1\" sz=\"2400\"/><a:t>Xin </a:t></a:r><a:r><a:rPr i=\"1\" sz=\"2400\"/><a:t>chào 😀</a:t></a:r></a:p></p:txBody></p:sp>")

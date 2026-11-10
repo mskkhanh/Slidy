@@ -76,6 +76,17 @@ final class InlineTextView: NSTextView {
     var finish: ((Bool) -> Void)?
     var onTextChange: (() -> Void)?
     private var renumbering = false
+    /// Slidy draws the text itself: NSTextView cuts glyphs at the top of a tight line box, which removed
+    /// stacked Vietnamese accents (Ế, Ẫ) in headings. The layout manager draws them whole.
+    override func draw(_ dirtyRect: NSRect) {
+        guard let manager = layoutManager, let container = textContainer else { super.draw(dirtyRect); return }
+        let range = manager.glyphRange(for: container)
+        manager.drawBackground(forGlyphRange: range, at: textContainerOrigin)
+        manager.drawGlyphs(forGlyphRange: range, at: textContainerOrigin)
+    }
+    // Accents sit outside their line box, so a partial redraw would leave them stale: always redraw the whole editor.
+    override func setNeedsDisplay(_ invalidRect: NSRect) { super.setNeedsDisplay(bounds) }
+    override func setNeedsDisplay(_ rect: NSRect, avoidAdditionalLayout flag: Bool) { super.setNeedsDisplay(bounds, avoidAdditionalLayout: flag) }
 
     /// A paragraph that is a list item starts with its marker and a tab: "•<tab>" or "2.<tab>".
     static func marker(in line: String) -> (length: Int, numbered: Bool)? {
