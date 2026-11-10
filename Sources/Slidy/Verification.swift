@@ -386,6 +386,11 @@ enum Verification {
             print("  report: \(AppDelegate.tidyReport(first).replacingOccurrences(of: "\n", with: " | "))")
             let second = delegate.tidyDeck(presentation)
             print("  second run: \(second.trimmed) trimmed, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")
+            delegate.canvas.display(presentation.slides[slideIndex], in: presentation); delegate.canvas.showsOrderBadges = true; delegate.canvas.updateOrderBadges(); delegate.canvas.displayIfNeeded()
+            if let bitmap = delegate.canvas.bitmapImageRepForCachingDisplay(in: delegate.canvas.bounds) {   // the slide with its order badges, to look at
+                delegate.canvas.cacheDisplay(in: delegate.canvas.bounds, to: bitmap)
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".badges.png"))
+            }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             print("  wand: \(plain.count) slides without effects got Fade (\(changed) now have it), \(untouched) slides with effects or no objects untouched, wrong: \(wrong)")
             return

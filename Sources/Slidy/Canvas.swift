@@ -229,7 +229,10 @@ final class CanvasView: NSView {
             for item in group {
                 let badge = OrderBadgeView(number: number + 1, grouped: grouped)
                 // Above the top edge and left of the top-right corner, so it never sits on a resize handle.
-                var frame = CGRect(x: item.frame.maxX - width - 16 / surfaceScale, y: item.frame.minY - diameter - 3 / surfaceScale, width: width, height: diameter)
+                // A picture has a resize handle on its top-right corner, so its badge stays clear of it. Any other object has
+                // the badge flush with its right edge; on a box narrower than the badge it starts at the left edge instead.
+                let x = item.imageURL != nil ? item.frame.maxX - width - 16 / surfaceScale : max(item.frame.minX, item.frame.maxX - width)
+                var frame = CGRect(x: x, y: item.frame.minY - diameter - 3 / surfaceScale, width: width, height: diameter)
                 // Badges of objects that start at nearly the same corner would pile up: slide each one left of the others.
                 while badgeViews.contains(where: { $0.frame.insetBy(dx: -1, dy: -1).intersects(frame) }) { frame.origin.x -= width + 2 }
                 badge.frame = frame
