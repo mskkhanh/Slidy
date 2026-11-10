@@ -22,7 +22,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Copy objects or a table (⌘C) and paste them (⌘V) on any slide, keeping their look and position; ⌘Z undoes the paste.
 - Double-click a picture to crop it (drag the handles, Return applies, Esc cancels). Saved as a standard crop, corners stay rounded.
 - Select all (⌘A) then F clears every Fade on the slide; select a group and press F to add Fade yourself. ⌘Z undoes it.
-- One click (wand button, top right) applies Fade, top to bottom, to the slides that have no effect yet and leaves the slides you animated by hand alone. ⌘Z undoes it.
+- One click (wand button, top right) applies Fade, top to bottom, to the slides that have no effect yet and leaves the slides you animated by hand alone. On every slide it also shrinks plain text boxes (no fill, no outline) to their text, without moving the text, so each order badge sits right above its text. A short report says what changed; ⌘Z undoes it.
 - Presentation mode with the same fade steps (Play button or ⌘F). The slide number shows small at the bottom left; press delete (⌫) to go back to the previous slide, shown complete. ⌘↓ / ⌘↑ jump to the next / previous slide, also shown complete.
 - Pure black editing UI and a display-only night mode (⌘L) that never changes the file.
 - Press ⌘/ for the keyboard shortcuts that are special to Slidy.

@@ -112,26 +112,45 @@ extension AppDelegate {
             targets.forEach { slide.applyFade(to: [$0]) }
         }
     }
-    /// Top-right button: slides that have no effect yet get a Fade on every object, top to bottom.
-    /// Slides that already have effects (the ones you set up by hand) are skipped and stay exactly as they are.
+    /// Top-right button. Slides that have no effect yet get a Fade on every object, top to bottom (slides you animated
+    /// yourself keep their effects). On every slide, plain text boxes shrink to their text, so each order badge sits
+    /// right above its text. A short report says what changed; one ⌘Z undoes all of it.
     @objc func fadeAllSlides() {
         guard let presentation, !busy, showWindow == nil, window.attachedSheet == nil else { return }
         canvas.finishEditing(commit: true)
-        let plain = slidesWithoutEffects(in: presentation)
+        checkpointAll()
+        let result = tidyDeck(presentation)
         let alert = NSAlert()
-        if plain.isEmpty {
-            alert.messageText = "All slides already have effects"
-            alert.informativeText = "Nothing to apply. Slides with effects are left as they are."
+        guard result.faded + result.trimmed > 0 else {
+            undo.removeAllActions(withTarget: self)   // nothing changed: no empty undo step
+            alert.messageText = "Nothing to change"
+            alert.informativeText = "Every slide already has effects and every text box already fits its text."
             alert.addButton(withTitle: "OK"); alert.runModal(); return
         }
-        let skipped = presentation.slides.count - plain.count
-        alert.messageText = "Apply Fade to \(plain.count) slides without effects?"
-        alert.informativeText = "Every object on those slides gets a Fade, top to bottom. The other \(skipped) slides already have effects (or no objects) and stay as they are. ⌘Z undoes it."
-        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        checkpointAll()
-        applyFade(toTopToBottom: plain)
         refreshAllSlides()
+        alert.messageText = "Done"
+        alert.informativeText = Self.tidyReport(result)
+        alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "Undo")
+        if alert.runModal() == .alertSecondButtonReturn { undo.undo() }
+    }
+    /// The work behind the wand button. Returns what changed.
+    func tidyDeck(_ presentation: Presentation) -> (faded: Int, trimmed: Int, trimmedSlides: Int) {
+        var trimmed = 0, trimmedSlides = 0
+        for slide in presentation.slides {
+            let count = slide.items.filter { presentation.trimTextBox($0) }.count
+            if count > 0 { trimmed += count; trimmedSlides += 1 }
+        }
+        let plain = slidesWithoutEffects(in: presentation)
+        applyFade(toTopToBottom: plain)
+        return (plain.count, trimmed, trimmedSlides)
+    }
+    static func tidyReport(_ result: (faded: Int, trimmed: Int, trimmedSlides: Int)) -> String {
+        func count(_ number: Int, _ noun: String) -> String { "\(number) \(noun)\(number == 1 ? "" : (noun.hasSuffix("x") ? "es" : "s"))" }
+        var lines: [String] = []
+        lines.append(result.faded > 0 ? "Fade added to \(count(result.faded, "slide"))." : "Fade: no slide without effects.")
+        lines.append(result.trimmed > 0 ? "\(count(result.trimmed, "text box")) trimmed on \(count(result.trimmedSlides, "slide"))." : "Text boxes: all already fit.")
+        lines.append("⌘Z undoes it.")
+        return lines.joined(separator: "\n")
     }
     /// ⌘G: groups the selected objects' Fade effects so they play together (one number, one icon), or ungroups them.
     @objc func toggleFadeGroup() {

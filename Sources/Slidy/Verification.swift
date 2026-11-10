@@ -361,6 +361,32 @@ enum Verification {
                 if plainIndexes.contains(index) { if !after[index].isEmpty { changed += 1 } else { wrong.append(index + 1) } }
                 else if after[index] == before[index] { untouched += 1 } else { wrong.append(index + 1) }
             }
+            // Trim: text stays where it is (same picture of every slide), boxes shrink, a second run changes nothing.
+            func shot() -> NSBitmapImageRep? {
+                delegate.canvas.select([]); delegate.canvas.showsOrderBadges = false; delegate.canvas.updateOrderBadges(); delegate.canvas.displayIfNeeded()
+                guard let bitmap = delegate.canvas.bitmapImageRepForCachingDisplay(in: delegate.canvas.bounds) else { return nil }
+                delegate.canvas.cacheDisplay(in: delegate.canvas.bounds, to: bitmap); delegate.canvas.showsOrderBadges = true; return bitmap
+            }
+            func differing(_ a: NSBitmapImageRep?, _ b: NSBitmapImageRep?) -> Int {
+                guard let a, let b, a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh, let x = a.bitmapData, let y = b.bitmapData else { return -1 }
+                var count = 0
+                for i in stride(from: 0, to: a.bytesPerRow * a.pixelsHigh, by: 4) where abs(Int(x[i]) - Int(y[i])) + abs(Int(x[i+1]) - Int(y[i+1])) + abs(Int(x[i+2]) - Int(y[i+2])) > 24 { count += 1 }
+                return count
+            }
+            var pictures: [NSBitmapImageRep?] = []
+            for slide in presentation.slides { delegate.canvas.display(slide, in: presentation); pictures.append(shot()) }
+            let widths: [CGFloat] = presentation.slides.map { $0.items.filter(\.canMove).map(\.frame.width).reduce(0, +) }
+            let first = delegate.tidyDeck(presentation)
+            var worst = 0, worstSlide = 0
+            for (index, slide) in presentation.slides.enumerated() { delegate.canvas.display(slide, in: presentation); let d = differing(pictures[index], shot()); if d > worst { worst = d; worstSlide = index + 1 } }
+            let widthsAfter: [CGFloat] = presentation.slides.map { $0.items.filter(\.canMove).map(\.frame.width).reduce(0, +) }
+            var narrower = 0
+            for (a, b) in zip(widths, widthsAfter) where a - b > 1 { narrower += 1 }
+            print("  trim: \(first.trimmed) text boxes on \(first.trimmedSlides) slides; slides with narrower boxes \(narrower); biggest change in any slide picture: \(worst) pixels (slide \(worstSlide))")
+            print("  report: \(AppDelegate.tidyReport(first).replacingOccurrences(of: "\n", with: " | "))")
+            let second = delegate.tidyDeck(presentation)
+            print("  second run: \(second.trimmed) trimmed, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             print("  wand: \(plain.count) slides without effects got Fade (\(changed) now have it), \(untouched) slides with effects or no objects untouched, wrong: \(wrong)")
             return
         }

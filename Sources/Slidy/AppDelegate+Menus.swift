@@ -27,7 +27,7 @@ extension AppDelegate {
         insert.addItem(menuItem("Text · T", #selector(addText))); insert.addItem(menuItem("Heading · H", #selector(addHeading))); insert.addItem(menuItem("Bullet List", #selector(addList))); insert.addItem(menuItem("Picture…", #selector(addImage)))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Present"); play.addItem(menuItem("From Current Slide", #selector(presentSlides), key: "f"))
-        play.addItem(menuItem("Fade Slides Without Effects…", #selector(fadeAllSlides)))
+        play.addItem(menuItem("Auto Fade and Trim Text Boxes", #selector(fadeAllSlides)))
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
         let view = NSMenu(title: "View")
         view.addItem(menuItem("Night / Light Mode", #selector(toggleNight), key: "l"))

@@ -11,7 +11,7 @@ enum Shortcuts {
             ("⇧↑ / ⇧↓", "Reorder Fade"),
             ("⌥⌘↑ / ⌥⌘↓", "Move layer"),
             ("⌥-click", "Select underneath"),
-            ("Wand button", "Auto Fade")
+            ("Wand button", "Auto Fade, trim text boxes")
         ]),
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide"),

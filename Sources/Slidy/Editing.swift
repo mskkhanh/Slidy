@@ -101,6 +101,46 @@ extension Presentation {
         frame.size.height = max(24, ceil(used))
         item.updateFrame(frame)
     }
+    /// Shrinks a plain text box (no fill, no outline) to its text, so the box and its order badge sit next to what you see.
+    /// The text stays exactly where it is: a left-aligned box keeps its left edge, a centered one its center, and so on.
+    /// A box whose text wraps keeps its width (only the empty space below goes), so no line breaks differently.
+    /// Returns true when the box changed.
+    @discardableResult
+    func trimTextBox(_ item: SlideItem) -> Bool {
+        guard item.canMove, item.cellTextOf == nil, item.textBody != nil, item.imageURL == nil, item.fill == nil, item.stroke == nil,
+              item.rotation == 0, item.node.child("style") == nil,
+              !item.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+        let anchor = item.anchor; item.anchor = "t"
+        let layouts = layoutParagraphs(item)
+        item.anchor = anchor
+        guard !layouts.isEmpty, layouts.count == item.paragraphs.count else { return false }
+        var needed: CGFloat = 0, wraps = false
+        for (layout, paragraph) in zip(layouts, item.paragraphs) {
+            let glyphs = layout.manager.glyphRange(for: layout.container)
+            var lines = 0, index = glyphs.location
+            while index < NSMaxRange(glyphs) {
+                var range = NSRange(); layout.manager.lineFragmentRect(forGlyphAt: index, effectiveRange: &range)
+                lines += 1; index = NSMaxRange(range)
+            }
+            let breaks = paragraph.text.string.components(separatedBy: "\u{2028}").count
+            if lines > breaks { wraps = true }
+            needed = max(needed, layout.origin.x + layout.manager.usedRect(for: layout.container).width + item.insets.right)
+        }
+        let alignments = Set(item.paragraphs.map(\.alignment))
+        var frame = item.frame
+        if !wraps, alignments.count == 1, let alignment = alignments.first, alignment != .justified {
+            let width = min(frame.width, ceil(needed * 1.03 + 4))   // a little slack: PowerPoint measures text slightly differently
+            if alignment == .center { frame.origin.x += (frame.width - width) / 2 } else if alignment == .right { frame.origin.x += frame.width - width }
+            frame.size.width = width
+        }
+        let used = (layouts.last.map { $0.origin.y + $0.height } ?? item.insets.top) + item.insets.bottom
+        let height = min(frame.height, max(12, ceil(used)))
+        if anchor == "ctr" { frame.origin.y += (frame.height - height) / 2 } else if anchor == "b" { frame.origin.y += frame.height - height }
+        frame.size.height = height
+        guard item.frame.width - frame.width >= 2 || item.frame.height - frame.height >= 2 else { return false }
+        item.updateFrame(frame)
+        return true
+    }
     /// Switches a text object to auto-fit and sizes it to its text.
     func enableAutoFit(_ item: SlideItem) {
         guard let bodyPr = item.textBody?.child("bodyPr") else { return }
