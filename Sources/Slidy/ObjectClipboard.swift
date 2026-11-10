@@ -53,6 +53,10 @@ extension Presentation {
     @discardableResult
     func importObjects(_ payload: ObjectClipboard.Payload, into slide: Slide, shift: CGFloat) throws -> [SlideItem] {
         var created: [SlideItem] = []
+        // A pasted table gets a new id. The text boxes split out of its cells are named after the table, so they follow
+        // the new id; a copied cell text whose table did not come along becomes an ordinary text box.
+        var tableIDs: [String: String] = [:]
+        var cellTexts: [(item: SlideItem, table: String)] = []
         for object in payload.objects where object.frame.count == 4 {
             let frame = CGRect(x: object.frame[0] + shift, y: object.frame[1] + shift, width: object.frame[2], height: object.frame[3])
             switch object.kind {
@@ -64,10 +68,13 @@ extension Presentation {
                 let item = parseItem(node, inherited: nil, rels: [:])
                 item.updateFrame(frame)
                 item.order = (slide.items.map(\.order).max() ?? 0) + 1
+                if let table = item.cellTextOf { cellTexts.append((item, table)); item.cellTextOf = nil }
                 slide.items.append(item); created.append(item)
             case "table":
                 guard let text = object.xml, let node = clipboardFragment(text), node.localName == "graphicFrame", node.descendant("tbl") != nil else { continue }
-                node.descendant("cNvPr")?.set("id", nextID(slide))
+                let old = node.descendant("cNvPr")?.attr("id") ?? ""
+                let new = nextID(slide)
+                node.descendant("cNvPr")?.set("id", new); tableIDs[old] = new
                 if shift != 0, let offset = node.child("xfrm")?.child("off") {
                     offset.set("x", String(Int(offset.number("x") + Double(shift) * emu))); offset.set("y", String(Int(offset.number("y") + Double(shift) * emu)))
                 }
@@ -92,6 +99,10 @@ extension Presentation {
                 }
             default: continue
             }
+        }
+        for (item, table) in cellTexts {
+            item.cellTextOf = tableIDs[table]
+            item.node.descendant("cNvPr")?.set("name", tableIDs[table].map { Self.cellTextPrefix + $0 } ?? "Text")
         }
         // Pasted objects start without animation.
         created.filter { $0.canMove && $0.hasFade }.forEach { slide.removeFade(from: $0) }

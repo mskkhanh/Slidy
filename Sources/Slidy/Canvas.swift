@@ -22,7 +22,7 @@ final class CanvasView: NSView {
     var onReorderFade: ((Int) -> Void)?
     var onMoveLayer: ((Int) -> Void)?
     var onJumpSlide: ((Int) -> Void)?
-    private var badgeViews: [OrderBadgeView] = []
+    var badgeViews: [OrderBadgeView] = []
     private(set) var selection: [SlideItem] = []
     var selected: SlideItem? {
         get { selection.count == 1 ? selection.first : nil }
@@ -56,31 +56,31 @@ final class CanvasView: NSView {
     var presenting = false
     var fadeSteps: [[(NSView, Double)]] = []
     var step = 0
-    private var dragOrigin: CGPoint?
-    private var dragItem: SlideItem?
-    private var dragFrames: [ObjectIdentifier: CGRect] = [:]
+    var dragOrigin: CGPoint?
+    var dragItem: SlideItem?
+    var dragFrames: [ObjectIdentifier: CGRect] = [:]
     /// Tables being dragged: their <p:graphicFrame> and its starting offset in EMU.
-    private var dragTables: [(node: XMLElement, x: Double, y: Double)] = []
-    private var pendingCollapse: SlideItem?
-    private var originalFrame = CGRect.zero
-    private var resizeCorner: CGPoint?
-    private var marqueeStart: CGPoint?
-    private var marqueeBase: [SlideItem] = []
+    var dragTables: [(node: XMLElement, x: Double, y: Double)] = []
+    var pendingCollapse: SlideItem?
+    var originalFrame = CGRect.zero
+    var resizeCorner: CGPoint?
+    var marqueeStart: CGPoint?
+    var marqueeBase: [SlideItem] = []
     /// Editing zoom (pinch on the trackpad). 1 fits the slide to the window; it never changes the file.
     private(set) var zoom: CGFloat = 1
-    private var panOffset = CGPoint.zero
-    private var surfaceScale: CGFloat { max(0.01, surface.frame.width / max(1, surface.bounds.width)) }
-    private var editedDrag = false
+    var panOffset = CGPoint.zero
+    var surfaceScale: CGFloat { max(0.01, surface.frame.width / max(1, surface.bounds.width)) }
+    var editedDrag = false
     /// Crop mode (double-click a picture): which picture, the whole picture's rectangle, the current crop rectangle and the drag in progress.
-    private var cropItem: SlideItem?
-    private var cropOriginalFrame = CGRect.zero
-    private var cropOriginalInsets = NSEdgeInsets()
-    private var cropDrag: (edges: CropHandles.Edges, start: CGPoint, rect: CGRect)?
+    var cropItem: SlideItem?
+    var cropOriginalFrame = CGRect.zero
+    var cropOriginalInsets = NSEdgeInsets()
+    var cropDrag: (edges: CropHandles.Edges, start: CGPoint, rect: CGRect)?
     var isCropping: Bool { cropItem != nil }
     /// Selection outline, handles and marquee are drawn by one transparent view kept above every object.
-    private let overlay = SelectionOverlay()
-    private var caretTimer: Timer?
-    private var caretObserver: NSObjectProtocol?
+    let overlay = SelectionOverlay()
+    var caretTimer: Timer?
+    var caretObserver: NSObjectProtocol?
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     override init(frame: NSRect) {
@@ -176,35 +176,6 @@ final class CanvasView: NSView {
         }
         updateSelection()
     }
-    private func resizeCorners(for item: SlideItem) -> [CGPoint] {
-        let lowerRight = CGPoint(x: item.frame.maxX, y: item.frame.maxY)
-        guard item.imageURL != nil else { return [lowerRight] }
-        return [
-            CGPoint(x: item.frame.minX, y: item.frame.minY),
-            CGPoint(x: item.frame.maxX, y: item.frame.minY),
-            CGPoint(x: item.frame.minX, y: item.frame.maxY),
-            lowerRight
-        ]
-    }
-    /// The handle under `point`, if any. The grab area is much larger than the handle you see (14 screen points around it)
-    /// and reaches outside the object, so a handle is easy to catch.
-    private func resizeHandle(at point: CGPoint, for item: SlideItem) -> CGPoint? {
-        let radius: CGFloat = 14 / surfaceScale
-        return resizeCorners(for: item)
-            .filter { abs(point.x - $0.x) <= radius && abs(point.y - $0.y) <= radius }
-            .min { hypot(point.x - $0.x, point.y - $0.y) < hypot(point.x - $1.x, point.y - $1.y) }
-    }
-    /// A plain click on the handle of the single selected object starts a resize, whichever view received the click.
-    private func beginResizeIfOnHandle(_ event: NSEvent) -> Bool {
-        guard event.type == .leftMouseDown, event.clickCount == 1, event.modifierFlags.intersection([.shift, .command, .option]).isEmpty,
-              selection.count == 1, let item = selected, item.canMove, editor == nil, !presenting else { return false }
-        let point = surface.convert(event.locationInWindow, from: nil)
-        guard let corner = resizeHandle(at: point, for: item) else { return false }
-        window?.makeFirstResponder(self)
-        dragOrigin = point; dragItem = item; originalFrame = item.frame; editedDrag = false
-        dragFrames = [:]; dragTables = []; pendingCollapse = nil; resizeCorner = corner
-        return true
-    }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
         if hit != nil, !presenting, editor == nil, let selected, selected.imageURL != nil,
@@ -219,104 +190,8 @@ final class CanvasView: NSView {
     }
     override func mouseDragged(with event: NSEvent) { continueDrag(event) }   // also a resize that started on a handle outside the slide
     override func mouseUp(with event: NSEvent) { finishDrag() }
-    func updateOrderBadges() {
-        badgeViews.forEach { $0.removeFromSuperview() }; badgeViews = []
-        guard showsOrderBadges, !presenting, let slide else { return }
-        let diameter = 14 / surfaceScale
-        for (number, group) in slide.fadeGroups.enumerated() {
-            let grouped = group.count > 1
-            let width = diameter * (number + 1 > 9 ? 1.25 : 0.8)   // just the digits
-            for item in group {
-                let badge = OrderBadgeView(number: number + 1, grouped: grouped)
-                // Text: the number sits right above the first character (its real ink, not the box, which can be much taller).
-                // Anything else: above the top-left corner (a picture has a resize handle there, so its number starts after it).
-                let gap = 2 / surfaceScale
-                var frame = CGRect(x: item.frame.minX + (item.imageURL != nil ? 16 / surfaceScale : 0), y: item.frame.minY - diameter - gap, width: width, height: diameter)
-                var beside = CGPoint(x: item.frame.minX - width - gap, y: item.frame.minY + gap)
-                if !item.text.isEmpty, let first = layoutParagraphs(item).first(where: { $0.storage.length > 0 }) {
-                    let glyphs = first.manager.glyphRange(for: first.container)
-                    if glyphs.length > 0 {
-                        let line = first.manager.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
-                        let place = first.manager.location(forGlyphAt: glyphs.location)
-                        let font = first.attributes[.font] as? NSFont ?? .systemFont(ofSize: 22)
-                        let left = item.frame.minX + (first.bullet != nil ? first.bulletX : first.origin.x + line.minX + place.x)
-                        let baseline = item.frame.minY + first.origin.y + line.minY + place.y
-                        let inkTop = baseline - font.capHeight - font.pointSize * 0.2   // room for an accent on the first letter
-                        frame.origin = CGPoint(x: left, y: inkTop - diameter)
-                        beside = CGPoint(x: left - width - 2 * gap, y: baseline - font.capHeight / 2 - diameter / 2)
-                    }
-                }
-                // If that spot would cover the text of another object (a heading right above, say), the number goes
-                // just left of the first line instead.
-                let covered = slide.items.contains { other in
-                    other !== item && other.canMove && other.imageURL == nil && other.fill == nil && !other.text.isEmpty && other.frame.intersects(frame)
-                }
-                if covered, item.imageURL == nil { frame.origin = beside }
-                // Badges of objects that start at nearly the same corner would pile up: slide each one right of the others.
-                while badgeViews.contains(where: { $0.frame.insetBy(dx: -1, dy: -1).intersects(frame) }) { frame.origin.x += width + 2 }
-                badge.frame = frame
-                surface.addSubview(badge); badgeViews.append(badge)
-            }
-        }
-        raiseOverlay()
-    }
-    // MARK: Crop mode
-    /// Double-click on a picture: shows the whole picture dimmed with a crop frame; drag its handles, Return applies, Esc cancels.
-    func startCrop(_ item: SlideItem) {
-        guard let presentation, let image = presentation.image(for: item), item.imageURL != nil, item.canMove, editor == nil, !presenting else { return }
-        let inset = item.imageCrop
-        let fullWidth = item.frame.width / max(0.05, 1 - inset.left - inset.right), fullHeight = item.frame.height / max(0.05, 1 - inset.top - inset.bottom)
-        cropItem = item; cropOriginalFrame = item.frame; cropOriginalInsets = inset
-        overlay.cropImage = image
-        overlay.cropFull = CGRect(x: item.frame.minX - inset.left * fullWidth, y: item.frame.minY - inset.top * fullHeight, width: fullWidth, height: fullHeight)
-        overlay.cropRect = item.frame
-        overlay.cropHandleSize = 10 / surfaceScale
-        updateSelection()
-    }
-    private func exitCrop() {
-        cropItem = nil; cropDrag = nil
-        overlay.cropImage = nil; overlay.needsDisplay = true
-        updateSelection()
-    }
-    func cancelCrop() { exitCrop() }
-    /// Applies the crop: the visible part keeps its size and place; the cut sides become <a:srcRect>.
-    func commitCrop() {
-        guard let item = cropItem else { return }
-        let full = overlay.cropFull, rect = overlay.cropRect
-        guard abs(rect.minX - cropOriginalFrame.minX) > 0.2 || abs(rect.minY - cropOriginalFrame.minY) > 0.2
-                || abs(rect.width - cropOriginalFrame.width) > 0.2 || abs(rect.height - cropOriginalFrame.height) > 0.2 else { exitCrop(); return }
-        let insets = NSEdgeInsets(top: (rect.minY - full.minY) / full.height, left: (rect.minX - full.minX) / full.width,
-                                  bottom: (full.maxY - rect.maxY) / full.height, right: (full.maxX - rect.maxX) / full.width)
-        onWillEdit?()
-        presentation?.setImageCrop(item, insets)
-        item.updateFrame(rect)
-        exitCrop()
-        rebuild(); onChanged?()
-    }
-    private func cropMouseDown(_ event: NSEvent) {
-        let point = surface.convert(event.locationInWindow, from: nil)
-        let reach = 14 / surfaceScale
-        let near = CropHandles.list(of: overlay.cropRect).filter { abs($0.point.x - point.x) <= reach && abs($0.point.y - point.y) <= reach }
-            .min { hypot($0.point.x - point.x, $0.point.y - point.y) < hypot($1.point.x - point.x, $1.point.y - point.y) }
-        cropDrag = near.map { ($0.edges, point, overlay.cropRect) }
-    }
-    private func cropMouseDragged(_ event: NSEvent) {
-        guard let drag = cropDrag else { return }
-        let point = surface.convert(event.locationInWindow, from: nil)
-        let dx = point.x - drag.start.x, dy = point.y - drag.start.y
-        let full = overlay.cropFull, start = drag.rect, minSize: CGFloat = 24
-        func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat { min(max(value, low), max(low, high)) }
-        var rect = start
-        if drag.edges.contains(.left) { let x = clamp(start.minX + dx, full.minX, start.maxX - minSize); rect.origin.x = x; rect.size.width = start.maxX - x }
-        if drag.edges.contains(.right) { rect.size.width = clamp(start.width + dx, minSize, full.maxX - start.minX) }
-        if drag.edges.contains(.top) { let y = clamp(start.minY + dy, full.minY, start.maxY - minSize); rect.origin.y = y; rect.size.height = start.maxY - y }
-        if drag.edges.contains(.bottom) { rect.size.height = clamp(start.height + dy, minSize, full.maxY - start.minY) }
-        overlay.cropRect = rect; overlay.needsDisplay = true
-    }
-    /// Test hook: the crop frame can be set directly.
-    var cropFrame: CGRect { get { overlay.cropRect } set { overlay.cropRect = newValue; overlay.needsDisplay = true } }
     /// Keeps the selection overlay above every object, badge and editor, whatever their stacking order.
-    private func raiseOverlay() {
+    func raiseOverlay() {
         overlay.frame = surface.bounds
         surface.addSubview(overlay, positioned: .above, relativeTo: nil)
         overlay.needsDisplay = true
@@ -339,389 +214,6 @@ final class CanvasView: NSView {
             overlay.lineWidth = 1 / scale
         } else { overlay.rects = []; overlay.handles = [] }
         raiseOverlay()
-    }
-    func backgroundClick(_ event: NSEvent) {
-        if presenting { advance(); return }
-        if cropItem != nil { cropMouseDown(event); return }
-        if beginResizeIfOnHandle(event) { return }
-        finishEditing(commit: true)
-        window?.makeFirstResponder(self)
-        guard event.type == .leftMouseDown else { return }
-        marqueeBase = event.modifierFlags.contains(.shift) ? selection.filter(\.canMove) : []
-        select(marqueeBase)
-        marqueeStart = surface.convert(event.locationInWindow, from: nil)
-    }
-    func updateMarquee(_ event: NSEvent) {
-        guard let start = marqueeStart, let slide else { return }
-        let point = surface.convert(event.locationInWindow, from: nil)
-        let area = CGRect(x: min(start.x, point.x), y: min(start.y, point.y),
-                          width: abs(point.x - start.x), height: abs(point.y - start.y))
-        let existing = Set(marqueeBase.map(ObjectIdentifier.init))
-        select(slide.items.filter { $0.canMove && (existing.contains(ObjectIdentifier($0)) || area.contains($0.frame)) })
-        overlay.marquee = area; overlay.lineWidth = 1 / surfaceScale; overlay.needsDisplay = true
-    }
-    func endMarquee() {
-        guard marqueeStart != nil else { return }
-        marqueeStart = nil
-        marqueeBase = []
-        overlay.marquee = nil; overlay.needsDisplay = true
-    }
-    func objectMouseDown(_ view: ObjectView, event: NSEvent) {
-        if presenting { advance(); return }
-        if cropItem != nil { cropMouseDown(event); return }
-        if beginResizeIfOnHandle(event) { return }
-        finishEditing(commit: true)
-        guard !view.item.inherited else { backgroundClick(event); return }
-        window?.makeFirstResponder(self)
-        dragOrigin = nil
-        if event.type == .leftMouseDown, !event.modifierFlags.intersection([.shift, .command]).isEmpty {
-            guard view.item.canMove || view.item.isTableCell else { return }
-            let group = members(of: view.item)
-            let present = selection.contains { $0 === view.item }
-            select(present ? selection.filter { chosen in !group.contains { $0 === chosen } } : selection + group)
-            return
-        }
-        let point = surface.convert(event.locationInWindow, from: nil)
-        var target = view.item
-        // ⌥-click picks the object underneath (e.g. the card behind its text); repeat to go deeper.
-        if event.modifierFlags.contains(.option), let slide {
-            let stack = slide.items.filter { $0.canMove && $0.frame.contains(point) }.reversed()
-            let order = Array(stack)
-            if let current = selected, let position = order.firstIndex(where: { $0 === current }) { target = order[(position + 1) % order.count] }
-            else if order.count > 1 { target = order[1] }
-        }
-        if event.clickCount == 2, target.imageURL != nil, target.canMove, !event.modifierFlags.contains(.option) {
-            select([target]); startCrop(target); return   // double-click on a picture crops it
-        }
-        // A plain click on one of several selected objects keeps the selection so they can be dragged together;
-        // releasing without a drag then narrows the selection to the clicked object.
-        let keepsMultiSelection = selection.count > 1 && selection.contains { $0 === target } && !event.modifierFlags.contains(.option)
-        if !keepsMultiSelection { select(members(of: target)) }   // a click on a table cell selects the whole table
-        pendingCollapse = keepsMultiSelection ? target : nil
-        if event.clickCount == 2 && target.textBody != nil { selected = target; pendingCollapse = nil; startEditing(at: point); return }
-        guard target.canMove || target.isTableCell else { return }
-        dragOrigin = point; dragItem = target; originalFrame = target.frame; editedDrag = false
-        // Several objects, or a table (all its cells), are dragged together from their starting frames.
-        let movesTogether = keepsMultiSelection || target.isTableCell || (target.cellTextOf != nil && selection.count > 1)
-        let moving = selection.filter { $0.canMove || $0.isTableCell }
-        dragFrames = movesTogether ? Dictionary(uniqueKeysWithValues: moving.map { (ObjectIdentifier($0), $0.frame) }) : [:]
-        dragTables = []
-        var seenTables = Set<ObjectIdentifier>()
-        for cell in moving { if let table = cell.tableNode, seenTables.insert(ObjectIdentifier(table)).inserted, let off = table.child("xfrm")?.child("off") { dragTables.append((table, off.number("x"), off.number("y"))) } }
-        resizeCorner = movesTogether ? nil : resizeHandle(at: point, for: target)
-    }
-    func objectMouseDragged(_ view: ObjectView, event: NSEvent) { continueDrag(event) }
-    func continueDrag(_ event: NSEvent) {
-        if cropItem != nil { cropMouseDragged(event); return }
-        if marqueeStart != nil { updateMarquee(event); return }
-        guard let start = dragOrigin, let item = dragItem, let host = objectViews.first(where: { $0.item === item }), editor == nil, !presenting else { return }
-        let point = surface.convert(event.locationInWindow, from: nil)
-        let dx = point.x - start.x, dy = point.y - start.y
-        guard abs(dx) + abs(dy) > 0.5 else { return }
-        if !editedDrag { onWillEdit?(); editedDrag = true }
-        if !dragFrames.isEmpty {   // several selected objects move together
-            var dx = dx, dy = dy
-            if !event.modifierFlags.contains(.command), let first = dragFrames.values.first {
-                let union = dragFrames.values.dropFirst().reduce(first) { $0.union($1) }.offsetBy(dx: dx, dy: dy)
-                let snap = snapped(union, excluding: Set(dragFrames.keys))
-                dx += snap.dx; dy += snap.dy; overlay.guides = snap.guides
-            } else { overlay.guides = [] }
-            for moved in selection where moved.canMove || moved.isTableCell {
-                guard var frame = dragFrames[ObjectIdentifier(moved)] else { continue }
-                frame.origin.x += dx; frame.origin.y += dy
-                if moved.isTableCell { moved.frame = frame } else { moved.updateFrame(frame) }   // cells live inside the table's own frame
-                objectViews.first { $0.item === moved }?.frame = frame
-            }
-            for table in dragTables {
-                guard let off = table.node.child("xfrm")?.child("off") else { continue }
-                off.set("x", String(Int(table.x + Double(dx) * emu))); off.set("y", String(Int(table.y + Double(dy) * emu)))
-            }
-            updateSelection(); updateOrderBadges()
-            return
-        }
-        var frame = originalFrame
-        if let corner = resizeCorner {
-            if item.imageURL != nil {
-                let left = corner.x == originalFrame.minX
-                let top = corner.y == originalFrame.minY
-                let dw = (left ? -dx : dx) / originalFrame.width
-                let dh = (top ? -dy : dy) / originalFrame.height
-                let delta = abs(dw) >= abs(dh) ? dw : dh
-                let scale = max(30 / originalFrame.width, 24 / originalFrame.height, 1 + delta)
-                frame.size = CGSize(width: originalFrame.width * scale, height: originalFrame.height * scale)
-                if left { frame.origin.x = originalFrame.maxX - frame.width }
-                if top { frame.origin.y = originalFrame.maxY - frame.height }
-            } else {
-                frame.size.width = max(30, originalFrame.width + dx)
-                frame.size.height = max(24, originalFrame.height + dy)
-            }
-            if !event.modifierFlags.contains(.command) {
-                frame = snapResize(frame, original: originalFrame, corner: corner, isImage: item.imageURL != nil, item: item)
-            } else { overlay.guides = [] }
-        } else {
-            frame.origin.x += dx; frame.origin.y += dy
-            if !event.modifierFlags.contains(.command) {
-                let snap = snapped(frame, excluding: [ObjectIdentifier(item)])
-                frame.origin.x += snap.dx; frame.origin.y += snap.dy; overlay.guides = snap.guides
-            } else { overlay.guides = [] }
-        }
-        item.updateFrame(frame); host.frame = frame; updateSelection()
-        updateOrderBadges()   // the Fade number travels with the object while it is dragged or resized
-    }
-    /// Edges and centres that dragged or resized objects snap to: the other objects and the slide itself.
-    private func snapTargets(excluding: Set<ObjectIdentifier>) -> [CGRect] {
-        guard let slide, let presentation else { return [] }
-        var targets = slide.items.filter { !excluding.contains(ObjectIdentifier($0)) && !$0.inherited && $0.frame.width > 0 }.map(\.frame)
-        targets.append(CGRect(origin: .zero, size: presentation.size))
-        return targets
-    }
-    private static func xs(_ r: CGRect) -> [CGFloat] { [r.minX, r.midX, r.maxX] }
-    private static func ys(_ r: CGRect) -> [CGFloat] { [r.minY, r.midY, r.maxY] }
-    /// The smallest move (within 6 screen points) that puts one of `values` on a target line, or nil.
-    private func nearestSnap(_ values: [CGFloat], targets: [[CGFloat]]) -> CGFloat? {
-        let threshold = 6 / surfaceScale
-        var result: CGFloat?
-        for line in targets { for target in line { for value in values {
-            let delta = target - value
-            if abs(delta) <= threshold, result == nil || abs(delta) < abs(result!) { result = delta }
-        } } }
-        return result
-    }
-    /// Guide lines for every edge or centre of `rect` that sits exactly on an edge or centre of a target.
-    private func guideLines(for rect: CGRect, targets: [CGRect]) -> [(CGPoint, CGPoint)] {
-        var guides: [(CGPoint, CGPoint)] = []
-        for target in targets {
-            for value in Self.xs(target) where Self.xs(rect).contains(where: { abs($0 - value) < 0.5 }) {
-                guides.append((CGPoint(x: value, y: min(rect.minY, target.minY)), CGPoint(x: value, y: max(rect.maxY, target.maxY))))
-            }
-            for value in Self.ys(target) where Self.ys(rect).contains(where: { abs($0 - value) < 0.5 }) {
-                guides.append((CGPoint(x: min(rect.minX, target.minX), y: value), CGPoint(x: max(rect.maxX, target.maxX), y: value)))
-            }
-        }
-        return guides
-    }
-    /// Smart guides while moving: snaps a rectangle and returns the guide lines. Hold ⌘ to move freely.
-    private func snapped(_ rect: CGRect, excluding: Set<ObjectIdentifier>) -> (dx: CGFloat, dy: CGFloat, guides: [(CGPoint, CGPoint)]) {
-        let targets = snapTargets(excluding: excluding)
-        let dx = nearestSnap(Self.xs(rect), targets: targets.map(Self.xs)) ?? 0
-        let dy = nearestSnap(Self.ys(rect), targets: targets.map(Self.ys)) ?? 0
-        return (dx, dy, guideLines(for: rect.offsetBy(dx: dx, dy: dy), targets: targets))
-    }
-    /// Smart guides while resizing: the edge being dragged snaps to other objects and the slide.
-    private func snapResize(_ frame: CGRect, original: CGRect, corner: CGPoint, isImage: Bool, item: SlideItem) -> CGRect {
-        let targets = snapTargets(excluding: [ObjectIdentifier(item)])
-        let txs = targets.map(Self.xs), tys = targets.map(Self.ys)
-        var frame = frame
-        if !isImage {   // text and shapes grow from the bottom-right handle
-            if let d = nearestSnap([frame.maxX], targets: txs) { frame.size.width = max(30, frame.width + d) }
-            if let d = nearestSnap([frame.maxY], targets: tys) { frame.size.height = max(24, frame.height + d) }
-        } else {        // images keep their proportions: snap the dragged corner on one axis and rescale
-            let left = corner.x == original.minX, top = corner.y == original.minY
-            var factor: CGFloat?
-            if let d = nearestSnap([left ? frame.minX : frame.maxX], targets: txs) { factor = (frame.width + (left ? -d : d)) / frame.width }
-            if let d = nearestSnap([top ? frame.minY : frame.maxY], targets: tys) {
-                let other = (frame.height + (top ? -d : d)) / frame.height
-                if factor == nil || abs(other - 1) < abs(factor! - 1) { factor = other }
-            }
-            if let factor, factor > 0.05 {
-                frame.size = CGSize(width: frame.width * factor, height: frame.height * factor)
-                if left { frame.origin.x = original.maxX - frame.width }
-                if top { frame.origin.y = original.maxY - frame.height }
-            }
-        }
-        overlay.guides = guideLines(for: frame, targets: targets)
-        return frame
-    }
-    func objectMouseUp(_ view: ObjectView, event: NSEvent) { finishDrag() }
-    func finishDrag() {
-        if cropItem != nil { cropDrag = nil; return }
-        overlay.guides = []; overlay.needsDisplay = true
-        endMarquee()
-        if !editedDrag, let clicked = pendingCollapse { select(members(of: clicked)) }
-        pendingCollapse = nil; dragFrames = [:]; dragTables = []
-        dragOrigin = nil
-        if editedDrag { editedDrag = false; rebuild(); onChanged?() }
-    }
-    /// Builds the inline editor so its text sits exactly where the rendered text is: same insets, indents,
-    /// line height, alignment, vertical anchor and run styles. Bullets are shown as "•<tab>" lines.
-    static let editorPad: CGFloat = 16
-    func makeEditor(for item: SlideItem) -> InlineTextView {
-        let night = nightActive
-        // The editor starts `editorPad` above the object: stacked accents (Ế, Ẫ) rise above a tight line box and would be cut off.
-        let view = InlineTextView(frame: CGRect(x: item.frame.minX, y: item.frame.minY - Self.editorPad, width: item.frame.width, height: item.frame.height + Self.editorPad))
-        view.isRichText = true; view.importsGraphics = false; view.usesFontPanel = false; view.usesRuler = false
-        view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
-        view.isAutomaticSpellingCorrectionEnabled = false; view.allowsUndo = true
-        var fallbackColor = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor : nil } ?? .labelColor
-        var editorBackground = item.fill ?? slide?.background ?? .white
-        if night { fallbackColor = NightMode.ink(fallbackColor); editorBackground = NightMode.surface(editorBackground) }
-        if usesNightMode, !presenting { editorBackground = NightMode.separated(editorBackground) }
-        let fallbackFont = item.paragraphs.first.flatMap { $0.text.length > 0 ? $0.text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont : nil } ?? .systemFont(ofSize: 24)
-        let content = NSMutableAttributedString()
-        var firstAttributes: [NSAttributedString.Key: Any] = [.font: fallbackFont, .foregroundColor: fallbackColor]
-        for (index, paragraph) in item.paragraphs.enumerated() {
-            let text = night ? NightMode.text(paragraph.text) : paragraph.text
-            var attributes: [NSAttributedString.Key: Any] = text.length > 0 ? text.attributes(at: 0, effectiveRange: nil) : [.font: fallbackFont, .foregroundColor: fallbackColor]
-            let style = NSMutableParagraphStyle()
-            style.alignment = paragraph.alignment
-            style.minimumLineHeight = paragraph.spacing; style.maximumLineHeight = paragraph.spacing
-            style.paragraphSpacingBefore = index == 0 ? 0 : paragraph.before
-            style.paragraphSpacing = paragraph.after
-            style.lineBreakMode = .byWordWrapping
-            style.headIndent = paragraph.left
-            style.firstLineHeadIndent = paragraph.bullet == nil ? paragraph.left : max(0, paragraph.left + paragraph.indent)
-            if paragraph.bullet != nil { style.tabStops = [NSTextTab(textAlignment: .left, location: paragraph.left)]; style.defaultTabInterval = 36 }
-            attributes[.paragraphStyle] = style
-            if index == 0 { firstAttributes = attributes }
-            let line = NSMutableAttributedString()
-            if let marker = paragraph.bullet { line.append(NSAttributedString(string: marker + "\t", attributes: attributes)) }
-            line.append(text)
-            if index < item.paragraphs.count - 1 { line.append(NSAttributedString(string: "\n", attributes: attributes)) }
-            line.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: line.length))
-            content.append(line)
-        }
-        view.textStorage?.setAttributedString(content)
-        view.typingAttributes = firstAttributes
-        view.drawsBackground = false
-        view.backgroundColor = editorBackground
-        view.insertionPointColor = (firstAttributes[.foregroundColor] as? NSColor) ?? fallbackColor
-        let top = layoutParagraphs(item, night: night).first?.origin.y ?? item.insets.top
-        view.textContainerInset = CGSize(width: item.insets.left, height: top + Self.editorPad)
-        view.textContainer?.lineFragmentPadding = 0
-        view.textContainer?.widthTracksTextView = false
-        view.textContainer?.containerSize = CGSize(width: max(1, item.frame.width - item.insets.left - item.insets.right), height: 100000)
-        view.isVerticallyResizable = true; view.maxSize = CGSize(width: item.frame.width, height: 100000)
-        return view
-    }
-    /// While typing in an auto-fit box the editor grows and shrinks with its text (width up to the margin, then more lines).
-    private func fitEditor() {
-        guard let editor, let item = selected, item.autoFit, let presentation, let storage = editor.textStorage,
-              let container = editor.textContainer, let manager = editor.layoutManager else { return }
-        let maxWidth = max(80, presentation.size.width - item.frame.minX - presentation.textLeftMargin)
-        let natural = storage.boundingRect(with: CGSize(width: 100000, height: 1000), options: [.usesLineFragmentOrigin]).width
-        let width = min(maxWidth, max(60, ceil(natural) + item.insets.left + item.insets.right + 2))
-        container.containerSize = CGSize(width: max(1, width - item.insets.left - item.insets.right), height: 100000)
-        editor.maxSize = CGSize(width: maxWidth, height: 100000)
-        manager.ensureLayout(for: container)
-        let used = manager.usedRect(for: container).height + editor.textContainerInset.height + item.insets.bottom
-        editor.setFrameSize(NSSize(width: width, height: max(24, ceil(used))))
-        updateCaret(restartBlink: false)
-    }
-    // The text caret is drawn by Slidy (in the overlay above everything) and blinks on its own timer.
-    // The system caret did not blink inside the scaled, layered slide view.
-    private func startCaret(for editor: InlineTextView) {
-        overlay.caretColor = editor.insertionPointColor
-        editor.insertionPointColor = .clear
-        caretObserver = NotificationCenter.default.addObserver(forName: NSTextView.didChangeSelectionNotification, object: editor, queue: .main) { [weak self] _ in
-            self?.updateCaret(restartBlink: true)
-        }
-        caretTimer = Timer.scheduledTimer(withTimeInterval: 0.55, repeats: true) { [weak self] _ in
-            guard let self, self.overlay.caret != nil else { return }
-            self.hideSystemCaret()
-            self.overlay.caretOn.toggle(); self.overlay.needsDisplay = true
-        }
-        updateCaret(restartBlink: true)
-    }
-    /// macOS 14+ draws its own insertion indicator inside the text view; keep it hidden so only Slidy's caret shows.
-    private func hideSystemCaret() {
-        func walk(_ view: NSView) {
-            for case let indicator as NSTextInsertionIndicator in view.subviews { indicator.displayMode = .hidden }
-            view.subviews.forEach(walk)
-        }
-        if let editor { walk(editor) }
-    }
-    private func stopCaret() {
-        caretTimer?.invalidate(); caretTimer = nil
-        if let caretObserver { NotificationCenter.default.removeObserver(caretObserver) }
-        caretObserver = nil
-        overlay.caret = nil; overlay.needsDisplay = true
-    }
-    /// Where the caret is, in slide coordinates (nil while text is selected).
-    var caretRect: CGRect? { overlay.caret }
-    func updateCaret(restartBlink: Bool) {
-        guard let editor, let manager = editor.layoutManager, let container = editor.textContainer, let storage = editor.textStorage else { overlay.caret = nil; return }
-        let selection = editor.selectedRange()
-        guard selection.length == 0 else { overlay.caret = nil; overlay.needsDisplay = true; return }
-        manager.ensureLayout(for: container)
-        var line = CGRect.zero, x: CGFloat = 0
-        let length = storage.length
-        if length == 0 || (selection.location >= length && storage.string.hasSuffix("\n")) {
-            line = manager.extraLineFragmentRect
-            if line == .zero { line = CGRect(x: 0, y: 0, width: 1, height: 24) }
-            x = manager.extraLineFragmentUsedRect.minX
-        } else if selection.location >= length {
-            let glyph = manager.glyphIndexForCharacter(at: length - 1)
-            line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-            x = manager.lineFragmentUsedRect(forGlyphAt: glyph, effectiveRange: nil).maxX
-        } else {
-            let glyph = manager.glyphIndexForCharacter(at: selection.location)
-            line = manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
-            x = line.minX + manager.location(forGlyphAt: glyph).x
-        }
-        // The caret hugs the text: it runs from the font's ascent above the baseline to its descent below it,
-        // wherever the (taller) line box leaves the extra space.
-        let font = (editor.typingAttributes[.font] as? NSFont) ?? .systemFont(ofSize: 24)
-        var baseline = line.minY + line.height - font.descender * -1 - (line.height - font.ascender + font.descender) / 2
-        if length > 0 {
-            let glyph = manager.glyphIndexForCharacter(at: min(max(0, selection.location), length - 1))
-            if manager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil) == line { baseline = line.minY + manager.location(forGlyphAt: glyph).y }
-        } else { baseline = line.minY + line.height + font.descender }
-        let height = font.ascender - font.descender
-        let origin = editor.textContainerOrigin
-        let local = CGRect(x: origin.x + x, y: origin.y + baseline - font.ascender, width: 1.5, height: height)
-        overlay.caret = surface.convert(local, from: editor)
-        hideSystemCaret()
-        if restartBlink { overlay.caretOn = true }
-        overlay.needsDisplay = true
-    }
-    /// `point` (slide coordinates) puts the caret where the person double-clicked instead of at the end.
-    func startEditing(selectContents: Bool = false, at point: CGPoint? = nil) {
-        guard let item = selected, item.textBody != nil, editor == nil else { return }
-        let view = makeEditor(for: item)
-        view.finish = { [weak self] commit in self?.finishEditing(commit: commit) }
-        if item.autoFit { view.onTextChange = { [weak self] in self?.fitEditor() } }
-        surface.addSubview(view); editor = view
-        startCaret(for: view)
-        updateOrderBadges()   // keep the order badges above the editor
-        // The editor is transparent: the object keeps drawing its own fill and outline, only its (replaced) text is hidden,
-        // so nothing underneath the box is ever covered.
-        objectViews.first { $0.item === item }?.paragraphViews.forEach { $0.isHidden = true }
-        updateSelection(); window?.makeFirstResponder(view)
-        if !selectContents, let point {
-            let inEditor = surface.convert(point, to: view)
-            var location = view.characterIndexForInsertion(at: inEditor)
-            // Never land inside a list marker ("•<tab>" or "2.<tab>"): put the caret after it.
-            let text = view.string as NSString
-            let lineStart = text.lineRange(for: NSRange(location: min(location, text.length), length: 0)).location
-            let line = text.substring(with: text.lineRange(for: NSRange(location: lineStart, length: 0))).trimmingCharacters(in: .newlines)
-            if let marker = InlineTextView.marker(in: line), location < lineStart + marker.length { location = lineStart + marker.length }
-            view.setSelectedRange(NSRange(location: max(0, min(location, text.length)), length: 0))
-        }
-        if selectContents {
-            let start = InlineTextView.marker(in: view.string.components(separatedBy: "\n").first ?? "")?.length ?? 0
-            view.setSelectedRange(NSRange(location: start, length: (view.string as NSString).length - start))
-        }
-    }
-    func finishEditing(commit: Bool) {
-        guard let editor else { return }
-        if commit, let item = selected {
-            let existingBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
-            let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
-            let bullets = editor.bulletRows, numbered = editor.numberedRows
-            let text = editor.plainText
-            if text != item.text || bullets != existingBullets || numbered != existingNumbered || editor.boldEdited {
-                onWillEdit?()
-                presentation?.updateText(item, text: text, bulletRows: bullets, numberedRows: numbered)
-                if editor.boldEdited { presentation?.applyBold(item, flags: editor.boldFlags) }
-                if !existingBullets.isEmpty || !bullets.isEmpty { slide?.timingDirty = true }
-                onChanged?()
-            }
-        }
-        stopCaret()
-        let editedCell = selected?.isTableCell == true ? selected : nil
-        editor.removeFromSuperview(); self.editor = nil
-        rebuild(); window?.makeFirstResponder(self)
-        if let editedCell { select(members(of: editedCell)) }
     }
     func advance() {
         if step < fadeSteps.count {

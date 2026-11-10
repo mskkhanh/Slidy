@@ -49,19 +49,38 @@ MIT, see [LICENSE](LICENSE).
 
 ```
 Sources/Slidy/
-  AppDelegate.swift            window, state, launch/quit
-  AppDelegate+Menus.swift      menu bar, toolbar buttons, shortcut sheet
-  AppDelegate+SlideList.swift  left column: thumbnails and recent files
-  AppDelegate+Document.swift   open, autosave, undo, status
-  AppDelegate+Editing.swift    insert, paste, delete, order, Fade actions
-  AppDelegate+Presenting.swift full-screen presentation
-  Canvas.swift                 the slide canvas (selection, drag, inline edit, playback)
-  ObjectViews.swift            object/surface/editor views, order badges, slide counter
-  TextLayout.swift             paragraph layout shared by canvas, thumbnails and editor
-  SlideModel.swift             Slide, SlideItem, Paragraph (parsed from the pptx XML)
-  Presentation.swift           opening and saving the .pptx, themes, images
-  Editing.swift                edits written back into the XML, in-place save
-  NightMode.swift              display-only night colors
-  Shortcuts.swift              the ⌘/ shortcut list (single source)
-  Verification.swift           debug-only headless checks: `--verify deck.pptx out/`, `--memory deck.pptx`
+  AppDelegate.swift              window, state, launch/quit
+  AppDelegate+Menus.swift        menu bar, toolbar and sidebar buttons, shortcut sheet
+  AppDelegate+SlideList.swift    left column: thumbnails and recent files
+  AppDelegate+Document.swift     open, autosave, undo, status
+  AppDelegate+Editing.swift      insert, paste, layer order, delete
+  AppDelegate+Fade.swift         Fade: toggle, tables, groups, order, the wand button
+  AppDelegate+Slides.swift       slides in the deck: move, add, delete, restore
+  AppDelegate+Presenting.swift   full-screen presentation
+  Canvas.swift                   the slide canvas: state, zoom, selection, keys, playback
+  Canvas+Drag.swift              mouse: select, drag, resize, snapping guides
+  Canvas+TextEditing.swift       the inline editor and its caret
+  Canvas+Crop.swift              crop mode for pictures
+  Canvas+OrderBadges.swift       the Fade order numbers
+  ObjectViews.swift              one object's view and the slide surface
+  InlineTextView.swift           the text editor view (lists, bold, whole accents)
+  Overlays.swift                 selection overlay, order numbers, crop handles, slide counter
+  TextLayout.swift               paragraph layout shared by canvas, thumbnails and editor
+  SlideModel.swift               Slide, SlideItem, Paragraph (parsed from the pptx XML)
+  Presentation.swift             opening the .pptx: parts, themes, parsing
+  Presentation+Text.swift        text edits: content, list spacing, bold
+  Presentation+TextFit.swift     text box size: grow, auto-fit, trim
+  Presentation+TableText.swift   cell text split into text boxes
+  Presentation+Insert.swift      new text boxes and pictures
+  Presentation+Saving.swift      Fade timing and saving
+  SlideInsert.swift              adding, removing and reordering slides in the package
+  ObjectClipboard.swift          copy / paste of objects
+  NightMode.swift                display-only night colors
+  Shortcuts.swift                the ⌘/ shortcut list (single source)
+  Windows.swift, XML.swift, GrayRowView.swift   small helpers
+  Verification*.swift            debug-only headless checks (`--verify`, `--drive`, `--snap`, `--memory`)
+tools/
+  smoke.sh                       opens a deck in a private copy of the app
+  regress.sh                     runs every headless scenario on the decks in .fixtures/ and prints one report;
+                                 diff two reports to see what a change did
 ```

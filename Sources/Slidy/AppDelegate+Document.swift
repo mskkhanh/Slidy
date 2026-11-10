@@ -42,6 +42,10 @@ extension AppDelegate {
             DispatchQueue.main.async { [weak self] in
                 guard let self, self.openRequest == request else { return }; self.busy = false
                 switch result {
+                case .success(let document) where document.slides.isEmpty:
+                    self.showError(AppError.message("This presentation has no slides."))
+                    self.status.isHidden = true
+                    self.updateStatus()
                 case .success(let document):
                     let position = min(max(0, lastIndex), document.slides.count - 1)
                     self.table.deselectAll(nil)

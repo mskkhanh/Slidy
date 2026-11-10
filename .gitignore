@@ -3,3 +3,4 @@ Slidy.app/
 .DS_Store
 *.pptx
 .metadata_never_index
+.fixtures/
