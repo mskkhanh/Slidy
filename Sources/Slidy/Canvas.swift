@@ -225,7 +225,7 @@ final class CanvasView: NSView {
         let diameter = 14 / surfaceScale
         for (number, group) in slide.fadeGroups.enumerated() {
             let grouped = group.count > 1
-            let width = diameter
+            let width = diameter * (number + 1 > 9 ? 1.25 : 0.8)   // just the digits
             for item in group {
                 let badge = OrderBadgeView(number: number + 1, grouped: grouped)
                 // Above the top-left corner of the object (a picture has a resize handle there, so its badge starts after it).

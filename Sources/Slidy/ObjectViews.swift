@@ -205,16 +205,18 @@ final class OrderBadgeView: NSView {
     required init?(coder: NSCoder) { fatalError() }
     override var isFlipped: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    /// Quiet on purpose: a small, faint gray disc with a gray number, so it never competes with the slide.
-    /// Grouped effects (⌘G) play together; their badge has a thin ring.
+    /// Quiet on purpose: just a small gray number, no disc and no background, so it never competes with the slide.
+    /// Grouped effects (⌘G) play together; their number is underlined.
     override func draw(_ dirtyRect: NSRect) {
-        let disc = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
-        NSColor(white: 0.5, alpha: 0.16).setFill(); disc.fill()
-        if grouped { NSColor(white: 0.5, alpha: 0.75).setStroke(); disc.lineWidth = max(0.6, bounds.height * 0.07); disc.stroke() }
+        let color = NSColor(white: 0.5, alpha: 0.95)
         let text = NSAttributedString(string: "\(number)", attributes: [
-            .font: NSFont.systemFont(ofSize: bounds.height * (number > 9 ? 0.56 : 0.64), weight: .medium), .foregroundColor: NSColor(white: 0.5, alpha: 0.95)])
+            .font: NSFont.systemFont(ofSize: bounds.height * 0.78, weight: .medium), .foregroundColor: color])
         let size = text.size()
-        text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+        let origin = NSPoint(x: 0, y: bounds.midY - size.height / 2)   // flush left with the object's edge
+        text.draw(at: origin)
+        guard grouped else { return }
+        color.setFill()
+        NSRect(x: 0, y: bounds.maxY - max(0.7, bounds.height * 0.07), width: size.width, height: max(0.7, bounds.height * 0.07)).fill()
     }
 }
 
