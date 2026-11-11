@@ -131,6 +131,7 @@ extension AppDelegate {
         let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove heading") ?? NSImage(), target: self, action: #selector(removeGroup(_:)))
         remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
         remove.toolTip = "Remove heading (files stay in the list)"; remove.imageScaling = .scaleProportionallyDown
+        remove.identifier = HoverReveal.identifier; remove.alphaValue = 0   // shown while the pointer is over the row
         for view in [chevron, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
         NSLayoutConstraint.activate([
             chevron.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6), chevron.centerYAnchor.constraint(equalTo: cell.centerYAnchor),

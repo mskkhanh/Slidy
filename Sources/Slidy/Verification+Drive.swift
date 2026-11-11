@@ -518,6 +518,23 @@ extension Verification {
             delegate.table.reloadData(); delegate.window.layoutIfNeeded()
             if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".groups.png")) }
             delegate.toggleGroup(button); print("  expanded: \(rows())")
+            // The ✕ buttons show only while the pointer is over their row.
+            delegate.updateRecentSidebar()
+            func removeButtons(_ row: Int) -> [NSView] {
+                func find(_ view: NSView) -> [NSView] { view.subviews.flatMap { ($0.identifier == HoverReveal.identifier ? [$0] : []) + find($0) } }
+                return delegate.table.rowView(atRow: row, makeIfNecessary: true).map(find) ?? []
+            }
+            let hoverEvent = NSEvent.enterExitEvent(with: .mouseEntered, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)!
+            let fileRow = delegate.sidebarRows.firstIndex { if case .file = $0 { return true } else { return false } } ?? 0
+            let headingRow = delegate.sidebarRows.firstIndex { if case .heading = $0 { return true } else { return false } } ?? 0
+            for (name, row) in [("file", fileRow), ("heading", headingRow)] {
+                let buttons = removeButtons(row)
+                let hidden = buttons.map(\.alphaValue)
+                if let rowView = delegate.table.rowView(atRow: row, makeIfNecessary: true) { rowView.mouseEntered(with: hoverEvent) }
+                let shown = buttons.map(\.alphaValue)
+                if let rowView = delegate.table.rowView(atRow: row, makeIfNecessary: true) { rowView.mouseExited(with: hoverEvent) }
+                print("  \(name) row ✕: \(buttons.count) button, hidden \(hidden), pointer over \(shown), pointer away \(buttons.map(\.alphaValue))")
+            }
             // Persisted, and the file list itself is untouched.
             print("  saved headings: \(delegate.recentGroups.map { "\($0.title)=\($0.keys.count)" }), recent files still \(delegate.recentPresentations.count)")
             // Renaming a file under a heading keeps it there; removing a file takes it out of the heading.

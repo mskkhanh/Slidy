@@ -92,6 +92,7 @@ extension AppDelegate {
             let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove from list") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
             remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
             remove.toolTip = "Remove from list"
+            remove.identifier = HoverReveal.identifier; remove.alphaValue = 0   // shown while the pointer is over the row
             remove.imageScaling = .scaleProportionallyDown
             for view in [icon, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
             NSLayoutConstraint.activate([
