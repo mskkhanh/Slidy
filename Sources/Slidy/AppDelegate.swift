@@ -139,9 +139,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let sidebarHeader = NSBox(); sidebarHeader.boxType = .custom; sidebarHeader.borderWidth = 0; sidebarHeader.fillColor = .black
         sidebarHeader.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(sidebarHeader)
         NSLayoutConstraint.activate([sidebarHeader.leadingAnchor.constraint(equalTo: scroll.leadingAnchor), sidebarHeader.trailingAnchor.constraint(equalTo: scroll.trailingAnchor), sidebarHeader.topAnchor.constraint(equalTo: root.topAnchor), sidebarHeader.bottomAnchor.constraint(equalTo: scroll.topAnchor)])
-        // Three very small buttons at the top right of the sidebar: recent files, slides, hide / show the sidebar.
+        // Three very small buttons at the top of the sidebar: recent files and slides on the left, hide / show on the right.
         // The last one stays on screen (top left) when the sidebar is collapsed.
-        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘E)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌃← / ⌃→)", #selector(toggleSidebar))] {
+        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘1)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides (⌘2)", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌃← / ⌃→)", #selector(toggleSidebar))] {
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
             button.isBordered = false; button.imagePosition = .imageOnly; button.target = self; button.action = action
             button.contentTintColor = .tertiaryLabelColor; button.toolTip = label; button.setAccessibilityLabel(label)
@@ -151,8 +151,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let pinned = sidebarButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -8); pinned.priority = .defaultHigh
         NSLayoutConstraint.activate([
             pinned, sidebarButton.leadingAnchor.constraint(greaterThanOrEqualTo: root.leadingAnchor, constant: 8),
-            slidesButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -30),
-            recentsButton.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -52)
+            recentsButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 10),
+            slidesButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 32)
         ])
         sidebarLeading = scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor)
         NSLayoutConstraint.activate([

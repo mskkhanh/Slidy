@@ -450,6 +450,11 @@ extension Verification {
             control(124); print("  ⌃→: sidebar hidden \(delegate.sidebarHidden)")
             delegate.recentsButton.performClick(nil); print("  recent button: showing recents \(delegate.showingRecents)"); shot("recents")
             delegate.slidesButton.performClick(nil); print("  slides button: showing recents \(delegate.showingRecents)")
+            func command(_ key: String) { _ = NSApp.mainMenu?.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 0)!) }
+            command("1"); print("  ⌘1: showing recents \(delegate.showingRecents)"); shot("recents2")
+            command("2"); print("  ⌘2: showing recents \(delegate.showingRecents)")
+            command("1"); command("e"); print("  ⌘1 then ⌘E: showing recents \(delegate.showingRecents) (⌘E still toggles)"); if delegate.showingRecents { command("2") }
+            print("  buttons: recent x \(Int(delegate.recentsButton.frame.minX)), slides x \(Int(delegate.slidesButton.frame.minX)), toggle x \(Int(delegate.sidebarButton.frame.minX)) (sidebar is 174 wide)")
             delegate.sidebarButton.performClick(nil); print("  toggle button: hidden \(delegate.sidebarHidden)"); delegate.sidebarButton.performClick(nil); print("  toggle button again: hidden \(delegate.sidebarHidden)")
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             return

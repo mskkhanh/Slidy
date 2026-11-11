@@ -16,7 +16,8 @@ enum Shortcuts {
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide"),
             ("⌘↑ / ⌘↓", "Move slide (list)"),
-            ("⌘E", "Recent files")
+            ("⌘1 · ⌘E", "Recent files"),
+            ("⌘2", "Slides")
         ]),
         ("View", [
             ("⌃← / ⌃→", "Hide / show sidebar"),

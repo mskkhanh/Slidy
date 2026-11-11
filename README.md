@@ -15,7 +15,8 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - ⌘B makes the selected text bold (or the whole text of the selected objects).
 - Pinch to zoom around the pointer (⌘0 fits the slide); moving or resizing objects shows alignment guides that snap to other objects and the slide edges/centre (hold ⌘ to move freely).
 - Press Delete (⌫) in the slide list to delete the selected slide (notes and unused media go too; ⌘Z restores everything).
-- In the recent files list (⌘E) double-click a name to rename the file on disk (only the part before .pptx can change; Return confirms, Esc cancels).
+- ⌘1 (or ⌘E) shows the recent files, ⌘2 the slides of the current file; the matching buttons sit at the top left of the sidebar, the hide / show button at its top right.
+- In the recent files list double-click a name to rename the file on disk (only the part before .pptx can change; Return confirms, Esc cancels).
 - Press Return in the slide list to add a slide after the selected one, with a heading and text box styled like the deck's other content slides; the new boxes fit their text and grow or shrink as you type (saved as auto-fit, so PowerPoint agrees).
 - Drag slide thumbnails in the left column to reorder slides (saved into the file; ⌘Z undoes it).
 - Click a table to select the whole table: drag it to move it, Delete removes it, ⌘Z undoes either; double-click a cell to edit its text.
