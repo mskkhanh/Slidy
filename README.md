@@ -16,6 +16,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Pinch to zoom around the pointer (⌘0 fits the slide); moving or resizing objects shows alignment guides that snap to other objects and the slide edges/centre (hold ⌘ to move freely).
 - Press Delete (⌫) in the slide list to delete the selected slide (notes and unused media go too; ⌘Z restores everything).
 - ⌘1 (or ⌘E) shows the recent files, ⌘2 the slides of the current file; the matching buttons sit at the top left of the sidebar, the hide / show button at its top right.
+- Headings in the recent files list work like folders: the new-heading button (top of the sidebar) adds one, double-click renames it, drag files under it (or drag it to reorder headings), the chevron collapses it, and ✕ removes only the heading. They live in the app's settings; no .pptx is touched.
 - In the recent files list double-click a name to rename the file on disk (only the part before .pptx can change; Return confirms, Esc cancels).
 - Press Return in the slide list to add a slide after the selected one, with a heading and text box styled like the deck's other content slides; the new boxes fit their text and grow or shrink as you type (saved as auto-fit, so PowerPoint agrees).
 - Drag slide thumbnails in the left column to reorder slides (saved into the file; ⌘Z undoes it).
@@ -53,6 +54,7 @@ Sources/Slidy/
   AppDelegate.swift              window, state, launch/quit
   AppDelegate+Menus.swift        menu bar, toolbar and sidebar buttons, shortcut sheet
   AppDelegate+SlideList.swift    left column: thumbnails and recent files
+  AppDelegate+RecentGroups.swift headings in the recent files list: storage, drag and drop, cells
   AppDelegate+Document.swift     open, autosave, undo, status
   AppDelegate+Editing.swift      insert, paste, layer order, delete
   AppDelegate+Fade.swift         Fade: toggle, tables, groups, order, the wand button

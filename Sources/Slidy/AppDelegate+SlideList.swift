@@ -37,7 +37,7 @@ extension AppDelegate {
         }
     }
     func updateRecentSidebar() {
-        recentSidebarEntries = recentPresentations
+        sidebarRows = buildSidebarRows()
         updateSidebarButtons()
         table.setAccessibilityLabel("Recent files")
         table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
@@ -45,15 +45,15 @@ extension AppDelegate {
         // The open file is highlighted without being "clicked" (which would reopen it).
         suppressSelectionOpen = true
         table.deselectAll(nil)
-        if let current = presentation?.source, let row = recentSidebarEntries.firstIndex(where: { $0.key == RecentPresentation.key(current.standardizedFileURL.path) }) {
+        if let current = presentation?.source, let row = sidebarRows.firstIndex(where: { if case .file(let file, _) = $0 { return file.key == RecentPresentation.key(current.standardizedFileURL.path) } else { return false } }) {
             table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
         suppressSelectionOpen = false
-        emptyRecents.isHidden = sidebarHidden || !(recentsMode && recentSidebarEntries.isEmpty)
+        emptyRecents.isHidden = sidebarHidden || !(recentsMode && sidebarRows.isEmpty)
     }
     func numberOfRows(in tableView: NSTableView) -> Int {
         if let presentation, !showingRecents { return presentation.slides.count }
-        return recentSidebarEntries.count
+        return sidebarRows.count
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
     private static let recentFont = NSFont.systemFont(ofSize: 12)
@@ -61,16 +61,19 @@ extension AppDelegate {
     /// Recent files sit close together; a long name takes a second line before it is truncated.
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if presentation != nil, !showingRecents { return 106 }
-        guard recentSidebarEntries.indices.contains(row) else { return 28 }
-        let name = recentSidebarEntries[row].url.deletingPathExtension().lastPathComponent
+        if recentGroup(at: row) != nil { return 26 }
+        guard let file = recentFile(at: row) else { return 28 }
+        let name = file.url.deletingPathExtension().lastPathComponent
         let box = (name as NSString).boundingRect(with: NSSize(width: Self.recentLabelWidth, height: 1000),
                                                   options: [.usesLineFragmentOrigin], attributes: [.font: Self.recentFont])
         return box.height > 20 ? 40 : 26
     }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let presentation, !showingRecents else {
-            guard recentSidebarEntries.indices.contains(row) else { return nil }
-            let entry = recentSidebarEntries[row]
+            if let group = recentGroup(at: row) { return headingCell(for: group, row: row) }
+            guard let entry = recentFile(at: row) else { return nil }
+            var indent: CGFloat = 0
+            if case .file(_, let indented) = sidebarRows[row], indented { indent = 12 }   // under a heading
             let cell = NSTableCellView()
             cell.toolTip = entry.path
             let symbol = NSImage(systemSymbolName: "play.rectangle.on.rectangle", accessibilityDescription: nil)
@@ -92,7 +95,7 @@ extension AppDelegate {
             remove.imageScaling = .scaleProportionallyDown
             for view in [icon, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
             NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16),
+                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8 + indent), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16),
                 remove.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6), remove.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 remove.widthAnchor.constraint(equalToConstant: 18), remove.heightAnchor.constraint(equalToConstant: 18),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6), label.trailingAnchor.constraint(equalTo: remove.leadingAnchor, constant: -4),
@@ -130,10 +133,12 @@ extension AppDelegate {
         return target == source ? nil : target
     }
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        if recentsMode { return busy ? nil : recentPasteboardWriter(row: row) }
         guard presentation != nil, !showingRecents, !busy else { return nil }
         let item = NSPasteboardItem(); item.setString(String(row), forType: Self.slideRowType); return item
     }
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
+        if recentsMode { return recentValidateDrop(info, row: row, operation: operation) }
         guard let presentation, !showingRecents, info.draggingSource as? NSTableView === table,
               let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
               Self.slideDropTarget(source: source, row: row) != nil, row <= presentation.slides.count else { return [] }
@@ -141,6 +146,7 @@ extension AppDelegate {
         return .move
     }
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+        if recentsMode { return recentAcceptDrop(info, row: row, operation: dropOperation) }
         guard let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
               let target = Self.slideDropTarget(source: source, row: row) else { return false }
         DispatchQueue.main.async { [weak self] in self?.moveSlideInDeck(from: source, to: target) }   // after the drop finishes
@@ -157,8 +163,8 @@ extension AppDelegate {
     // MARK: Recent files: click opens, double-click renames
     /// Opens the recent file in `row` (or closes the list when it is the file already open).
     func openRecent(row: Int) {
-        guard recentsMode, recentSidebarEntries.indices.contains(row), !busy else { return }
-        let url = recentSidebarEntries[row].url
+        guard recentsMode, let file = recentFile(at: row), !busy else { return }
+        let url = file.url
         if let open = presentation?.source, RecentPresentation.key(url.standardizedFileURL.path) == RecentPresentation.key(open.standardizedFileURL.path) { toggleRecents() }
         else { openURL(url) }
     }
@@ -166,7 +172,7 @@ extension AppDelegate {
     @objc func recentClicked() {
         guard recentsMode, renameField == nil else { return }
         let row = table.clickedRow
-        guard row >= 0 else { return }
+        guard row >= 0, recentFile(at: row) != nil else { return }   // a heading does nothing on a single click
         pendingRecentOpen?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.openRecent(row: row) }
         pendingRecentOpen = work
@@ -175,14 +181,14 @@ extension AppDelegate {
     @objc func recentDoubleClicked() {
         pendingRecentOpen?.cancel(); pendingRecentOpen = nil
         guard recentsMode else { return }
-        beginRename(row: table.clickedRow)
+        if recentGroup(at: table.clickedRow) != nil { beginRenameGroup(row: table.clickedRow) } else { beginRename(row: table.clickedRow) }
     }
     /// The name is edited in place; only the part before ".pptx" can change.
     func beginRename(row: Int) {
-        guard recentSidebarEntries.indices.contains(row), renameField == nil,
+        guard let file = recentFile(at: row), renameField == nil,
               let cell = table.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
               let field = cell.subviews.compactMap({ $0 as? NSTextField }).first else { return }
-        let url = recentSidebarEntries[row].url
+        let url = file.url
         guard FileManager.default.fileExists(atPath: url.path) else { NSSound.beep(); return }
         renamingURL = url; renameField = field
         field.stringValue = url.deletingPathExtension().lastPathComponent
@@ -203,12 +209,13 @@ extension AppDelegate {
         if notification.object as? NSTextField === renameField { finishRename(commit: true) }   // clicking elsewhere keeps the new name
     }
     func finishRename(commit: Bool) {
-        guard let field = renameField, let url = renamingURL else { return }
-        let text = field.stringValue
-        renameField = nil; renamingURL = nil
+        guard let field = renameField else { return }
+        let text = field.stringValue, url = renamingURL, group = renamingGroup
+        renameField = nil; renamingURL = nil; renamingGroup = nil
         field.delegate = nil; field.isEditable = false; field.drawsBackground = false
         if commit {
-            do { try renameFile(at: url, to: text) } catch { showError(error) }
+            if let group { commitGroupTitle(id: group, text: text) }
+            else if let url { do { try renameFile(at: url, to: text) } catch { showError(error) } }
         }
         updateRecentSidebar()
         window.makeFirstResponder(table)
@@ -225,9 +232,10 @@ extension AppDelegate {
     }
     /// Removes a file from the recent list only. The file itself is never touched.
     @objc func removeRecent(_ sender: NSButton) {
-        guard recentSidebarEntries.indices.contains(sender.tag) else { return }
-        let key = recentSidebarEntries[sender.tag].key
+        guard let file = recentFile(at: sender.tag) else { return }
+        let key = file.key
         recentPresentations = recentPresentations.filter { $0.key != key }
+        replaceGroupKey(key, with: nil)
         updateRecentSidebar()
     }
     func showSlideList() {

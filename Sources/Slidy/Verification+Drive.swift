@@ -473,6 +473,66 @@ extension Verification {
             for _ in 0..<30 where delegate.undo.canUndo { delegate.undo.undo() }
             return
         }
+        if ProcessInfo.processInfo.environment["GROUPS"] != nil {   // headings in the recent files list: create, drag files under them, collapse, remove
+            let saved = (delegate.recentPresentations, delegate.recentGroups)
+            defer { delegate.recentPresentations = saved.0; delegate.recentGroups = saved.1 }
+            let names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo"]
+            delegate.recentGroups = []
+            delegate.recentPresentations = names.map { RecentPresentation(path: "/tmp/\($0).pptx", slide: 0) }
+            let keys = names.map { RecentPresentation.key("/tmp/\($0).pptx") }
+            func rows() -> String { delegate.sidebarRows.map { row -> String in
+                switch row { case .heading(let g): return "[\(g.title)\(g.collapsed ? " +" : "")]"; case .file(let f, let indented): return (indented ? "  " : "") + f.url.deletingPathExtension().lastPathComponent } }.joined(separator: " | ") }
+            delegate.showingRecents = true; delegate.updateRecentSidebar()
+            print("  start: \(rows())")
+            delegate.addSidebarHeading(nil)
+            delegate.renameField?.stringValue = "Week 1"; delegate.finishRename(commit: true)
+            delegate.addSidebarHeading(nil)
+            delegate.renameField?.stringValue = "Week 2"; delegate.finishRename(commit: true)
+            print("  two headings: \(rows())")
+            func drop(_ value: String, row: Int, on: Bool = false) -> Bool { let ok = delegate.applyRecentDrop(value, row: row, operation: on ? .on : .above); delegate.updateRecentSidebar(); return ok }
+            // Drag Bravo and Delta onto "Week 1" (dropped on the heading), Echo under "Week 2" (dropped just below it).
+            let week1 = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return g.title == "Week 1" } else { return false } } ?? 0
+            _ = drop("file:" + keys[1], row: week1, on: true)
+            let week1b = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return g.title == "Week 1" } else { return false } } ?? 0
+            _ = drop("file:" + keys[3], row: week1b, on: true)
+            let week2 = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return g.title == "Week 2" } else { return false } } ?? 0
+            _ = drop("file:" + keys[4], row: week2 + 1)
+            print("  after drops: \(rows())")
+            // Within a heading: Echo above ... (reorder inside Week 1: Delta above Bravo)
+            let bravoRow = delegate.sidebarRows.firstIndex { if case .file(let f, _) = $0 { return f.key == keys[1] } else { return false } } ?? 0
+            _ = drop("file:" + keys[3], row: bravoRow)
+            print("  Delta above Bravo: \(rows())")
+            // Back out of a heading: drop Delta at the very top of the list.
+            _ = drop("file:" + keys[3], row: 0)
+            print("  Delta back to the plain list: \(rows())")
+            // Reorder headings: Week 2 above Week 1.
+            let w2 = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return g.title == "Week 2" } else { return false } } ?? 0
+            let w1 = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return g.title == "Week 1" } else { return false } } ?? 0
+            _ = drop("group:" + (delegate.recentGroup(at: w2)?.id ?? ""), row: w1)
+            print("  headings swapped: \(rows())")
+            // Collapse / expand.
+            let first = delegate.sidebarRows.firstIndex { if case .heading = $0 { return true } else { return false } } ?? 0
+            let button = NSButton(); button.tag = first
+            delegate.toggleGroup(button); print("  collapsed: \(rows())")
+            if let live = (delegate.window.contentView.map { _ in delegate.table }) { _ = live }
+            delegate.table.reloadData(); delegate.window.layoutIfNeeded()
+            if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".groups.png")) }
+            delegate.toggleGroup(button); print("  expanded: \(rows())")
+            // Persisted, and the file list itself is untouched.
+            print("  saved headings: \(delegate.recentGroups.map { "\($0.title)=\($0.keys.count)" }), recent files still \(delegate.recentPresentations.count)")
+            // Renaming a file under a heading keeps it there; removing a file takes it out of the heading.
+            let victim = RecentPresentation.key("/tmp/Bravo.pptx"); delegate.replaceGroupKey(victim, with: RecentPresentation.key("/tmp/Bravo2.pptx"))
+            print("  renamed key follows: \(delegate.recentGroups.flatMap(\.keys).contains(RecentPresentation.key("/tmp/Bravo2.pptx"))), old gone: \(!delegate.recentGroups.flatMap(\.keys).contains(victim))")
+            // More than 20 files: the ones under a heading are kept.
+            let many = (0..<30).map { RecentPresentation(path: "/tmp/F\($0).pptx", slide: 0) } + delegate.recentPresentations
+            let trimmed = delegate.trimmedRecents(many)
+            print("  trim: \(trimmed.count) kept of \(many.count); grouped kept: \(delegate.recentGroups.flatMap(\.keys).filter { key in many.contains { $0.key == key } }.allSatisfy { key in trimmed.contains { $0.key == key } })")
+            // Removing a heading sends its files back to the plain list.
+            let removeButton = NSButton(); removeButton.tag = first
+            delegate.recentGroups = delegate.recentGroups.filter { $0.id != delegate.recentGroup(at: first)?.id }; delegate.updateRecentSidebar()
+            print("  heading removed: \(rows())")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

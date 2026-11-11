@@ -65,6 +65,8 @@ extension AppDelegate {
     func updateSidebarButtons() {
         recentsButton.contentTintColor = recentsMode ? .labelColor : .tertiaryLabelColor
         slidesButton.contentTintColor = recentsMode ? .tertiaryLabelColor : .labelColor
+        headingButton.isHidden = sidebarHidden || !recentsMode   // headings are for the recent files list
+        headingButton.contentTintColor = .tertiaryLabelColor
         sidebarButton.contentTintColor = sidebarHidden ? .secondaryLabelColor : .tertiaryLabelColor
     }
     /// ⌘B: bold on / off for the selected text while editing, or for the whole text of the selected objects.
@@ -85,7 +87,7 @@ extension AppDelegate {
     func setSidebarHidden(_ hidden: Bool, remember: Bool = true, animated: Bool = true) {
         sidebarHidden = hidden
         updateSidebarButtons()
-        emptyRecents.isHidden = hidden || !(recentsMode && recentSidebarEntries.isEmpty)
+        emptyRecents.isHidden = hidden || !(recentsMode && sidebarRows.isEmpty)
         if remember { UserDefaults.standard.set(hidden, forKey: "sidebarHidden") }
         let target: CGFloat = hidden ? -Self.sidebarOffset : 0
         guard animated, window?.isVisible == true else {

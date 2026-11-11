@@ -9,9 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let nightButton = NSButton()
     let playButton = NSButton()
     let fadeAllButton = NSButton()
-    let recentsButton = NSButton(), slidesButton = NSButton(), sidebarButton = NSButton()
+    let recentsButton = NSButton(), slidesButton = NSButton(), sidebarButton = NSButton(), headingButton = NSButton()
     var toolbarView: NSView?
-    var recentSidebarEntries: [RecentPresentation] = []
+    var sidebarRows: [SidebarRow] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     var showingRecents = false
     /// Left column (thumbnails / recent files) can be hidden with ⌘B; the choice is remembered.
@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     /// The text field currently renaming a file in the recent list.
     weak var renameField: NSTextField?
     var renamingURL: URL?
+    var renamingGroup: String?
     var modified = false {
         didSet { if modified && !oldValue, ProcessInfo.processInfo.environment["SLIDY_TRACE_MODIFIED"] != nil { fputs("MODIFIED set by:\n" + Thread.callStackSymbols.prefix(14).joined(separator: "\n") + "\n", stderr) } }
     }
@@ -91,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         let scroll = NSScrollView()
         let column = NSTableColumn(identifier: .init("slides")); column.width = 174; column.resizingMask = .autoresizingMask
         table.addTableColumn(column); table.headerView = nil; table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
-        table.delegate = self; table.dataSource = self; table.registerForDraggedTypes([AppDelegate.slideRowType]); table.setDraggingSourceOperationMask(.move, forLocal: true); table.draggingDestinationFeedbackStyle = .sourceList; table.backgroundColor = .black
+        table.delegate = self; table.dataSource = self; table.registerForDraggedTypes([AppDelegate.slideRowType, AppDelegate.recentRowType]); table.setDraggingSourceOperationMask(.move, forLocal: true); table.draggingDestinationFeedbackStyle = .sourceList; table.backgroundColor = .black
         table.target = self; table.action = #selector(recentClicked); table.doubleAction = #selector(recentDoubleClicked)
         table.style = .plain
         scroll.drawsBackground = true; scroll.backgroundColor = .black
@@ -139,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         NSLayoutConstraint.activate([sidebarHeader.leadingAnchor.constraint(equalTo: scroll.leadingAnchor), sidebarHeader.trailingAnchor.constraint(equalTo: scroll.trailingAnchor), sidebarHeader.topAnchor.constraint(equalTo: root.topAnchor), sidebarHeader.bottomAnchor.constraint(equalTo: scroll.topAnchor)])
         // Three very small buttons at the top of the sidebar: recent files and slides on the left, hide / show on the right.
         // The last one stays on screen (top left) when the sidebar is collapsed.
-        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘1)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides (⌘2)", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌘S)", #selector(toggleSidebar))] {
+        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘1)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides (⌘2)", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌘S)", #selector(toggleSidebar)), (headingButton, "folder.badge.plus", "New heading", #selector(addSidebarHeading(_:)))] {
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
             button.isBordered = false; button.imagePosition = .imageOnly; button.target = self; button.action = action
             button.contentTintColor = .tertiaryLabelColor; button.toolTip = label; button.setAccessibilityLabel(label)
@@ -150,7 +151,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         NSLayoutConstraint.activate([
             pinned, sidebarButton.leadingAnchor.constraint(greaterThanOrEqualTo: root.leadingAnchor, constant: 8),
             recentsButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 10),
-            slidesButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 32)
+            slidesButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 32),
+            headingButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 62)
         ])
         sidebarLeading = scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor)
         NSLayoutConstraint.activate([

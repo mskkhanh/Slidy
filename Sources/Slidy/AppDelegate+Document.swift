@@ -12,8 +12,7 @@ extension AppDelegate {
         let previous = recentPresentations
         let key = RecentPresentation.key(path)
         if previous.first?.key != key || previous.first?.slide != index {
-            recentPresentations = [RecentPresentation(path: path, slide: index)] +
-                Array(previous.filter { $0.key != key }.prefix(19))
+            recentPresentations = trimmedRecents([RecentPresentation(path: path, slide: index)] + previous.filter { $0.key != key })
         }
         status.stringValue = ""
         status.isHidden = true
@@ -64,6 +63,7 @@ extension AppDelegate {
                     // A file that is gone is dropped from the list; one that merely failed to open stays.
                     if restoring || !FileManager.default.fileExists(atPath: url.path) {
                         self.recentPresentations = self.recentPresentations.filter { $0.key != wanted }
+                        self.replaceGroupKey(wanted, with: nil)
                     }
                     self.showError(error)
                     self.status.isHidden = true
@@ -215,6 +215,7 @@ extension AppDelegate {
         recentPresentations = recentPresentations
             .map { $0.key == oldKey ? RecentPresentation(path: newURL.standardizedFileURL.path, slide: $0.slide) : $0 }
             .filter { seen.insert($0.key).inserted }   // never the same file twice
+        replaceGroupKey(oldKey, with: RecentPresentation.key(newURL.standardizedFileURL.path))
         if isOpen { presentation?.source = newURL; updateStatus() }
         return newURL
     }
