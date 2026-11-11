@@ -17,11 +17,11 @@ final class OrderBadgeView: NSView {
         let text = NSAttributedString(string: "\(number)", attributes: [
             .font: NSFont.systemFont(ofSize: bounds.height * 0.78, weight: .medium), .foregroundColor: color])
         let size = text.size()
-        let origin = NSPoint(x: 0, y: bounds.midY - size.height / 2)   // flush left with the object's edge
+        let origin = NSPoint(x: bounds.maxX - size.width, y: bounds.midY - size.height / 2)   // right-aligned: the digit sits against the text
         text.draw(at: origin)
         guard grouped else { return }
         color.setFill()
-        NSRect(x: 0, y: bounds.maxY - max(0.7, bounds.height * 0.07), width: size.width, height: max(0.7, bounds.height * 0.07)).fill()
+        NSRect(x: origin.x, y: bounds.maxY - max(0.7, bounds.height * 0.07), width: size.width, height: max(0.7, bounds.height * 0.07)).fill()
     }
 }
 
