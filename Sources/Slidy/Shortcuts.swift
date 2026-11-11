@@ -20,7 +20,7 @@ enum Shortcuts {
             ("⌘2", "Slides")
         ]),
         ("View", [
-            ("⌃← / ⌃→", "Hide / show sidebar"),
+            ("⌘S", "Hide / show sidebar"),
             ("⌘0", "Fit slide"),
             ("⌘L", "Night mode")
         ]),

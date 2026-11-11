@@ -11,7 +11,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Fade animations with numbered order badges on the slide: select an object and press ⇧↑ / ⇧↓ to reorder.
 - F on a table fades the table in first, then the text of each cell, left to right and top to bottom. A .pptx table can only be animated as a whole, so each cell's text moves into its own text box over the cell (the slide looks the same; the group still selects, moves and deletes together; ⌘Z undoes it).
 - ⌥⌘↑ / ⌥⌘↓ move the selected object one layer forward / backward per press (a table moves as a whole).
-- ⌘G groups the selected Fade effects (one number, link icon); ⇧↑/⇧↓ reorders them (⌘↑/↓ switches slides); ⌘↑/↓ switches slides (or, with the slide list focused, moves the selected slide up/down in the deck); ⌃← / ⌃→ hide / show the sidebar (three small buttons at its top right: recent files, slides, hide / show; the last stays visible when the sidebar is collapsed).
+- ⌘G groups the selected Fade effects (one number, link icon); ⇧↑/⇧↓ reorders them (⌘↑/↓ switches slides); ⌘↑/↓ switches slides (or, with the slide list focused, moves the selected slide up/down in the deck); ⌘S hides / shows the sidebar (three small buttons at its top right: recent files, slides, hide / show; the last stays visible when the sidebar is collapsed).
 - ⌘B makes the selected text bold (or the whole text of the selected objects).
 - Pinch to zoom around the pointer (⌘0 fits the slide); moving or resizing objects shows alignment guides that snap to other objects and the slide edges/centre (hold ⌘ to move freely).
 - Press Delete (⌫) in the slide list to delete the selected slide (notes and unused media go too; ⌘Z restores everything).

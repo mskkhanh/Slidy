@@ -73,8 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "newSlide": self?.insertSlideInDeck(after: self?.index ?? 0)
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)
-            case "sidebarHide": self?.setSidebarHidden(true)
-            case "sidebarShow": self?.setSidebarHidden(false)
             default: break
             }
         }
@@ -141,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         NSLayoutConstraint.activate([sidebarHeader.leadingAnchor.constraint(equalTo: scroll.leadingAnchor), sidebarHeader.trailingAnchor.constraint(equalTo: scroll.trailingAnchor), sidebarHeader.topAnchor.constraint(equalTo: root.topAnchor), sidebarHeader.bottomAnchor.constraint(equalTo: scroll.topAnchor)])
         // Three very small buttons at the top of the sidebar: recent files and slides on the left, hide / show on the right.
         // The last one stays on screen (top left) when the sidebar is collapsed.
-        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘1)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides (⌘2)", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌃← / ⌃→)", #selector(toggleSidebar))] {
+        for (button, symbol, label, action) in [(recentsButton, "clock", "Recent files (⌘1)", #selector(showRecentFiles)), (slidesButton, "rectangle.stack", "Slides (⌘2)", #selector(showSlides)), (sidebarButton, "sidebar.left", "Hide / show sidebar (⌘S)", #selector(toggleSidebar))] {
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?.withSymbolConfiguration(.init(pointSize: 10, weight: .regular))
             button.isBordered = false; button.imagePosition = .imageOnly; button.target = self; button.action = action
             button.contentTintColor = .tertiaryLabelColor; button.toolTip = label; button.setAccessibilityLabel(label)

@@ -416,7 +416,7 @@ extension Verification {
             print("  after undo: text boxes \(restored.items.filter { $0.cellTextOf == id }.count), cell texts back \(restored.items.filter { $0.tableID == id && !$0.isTableFrame }.map(\.text).filter { !$0.isEmpty } == cellTexts), picture differs by \(Self.differing(before, shot())) pixels")
             return
         }
-        if ProcessInfo.processInfo.environment["BOLD"] != nil {   // ⌘B on selected text while editing; ⌃← / ⌃→ and the sidebar buttons
+        if ProcessInfo.processInfo.environment["BOLD"] != nil {   // ⌘B on selected text while editing; ⌘S and the sidebar buttons
             let slide = presentation.slides[slideIndex]
             guard let item = slide.items.first(where: { $0.canMove && $0.text.count > 8 }) else { print("  no text"); return }
             func runs(_ i: SlideItem) -> String { (i.textBody?.all("p").first?.all("r") ?? []).map { "[\($0.child("t")?.stringValue ?? "")|b=\($0.child("rPr")?.attr("b") ?? "-")]" }.joined() }
@@ -438,7 +438,6 @@ extension Verification {
             delegate.canvas.select([item]); delegate.toggleBold(); print("  ⌘B on the object: \(runs(item))")
             delegate.toggleBold(); print("  ⌘B on the object again: \(runs(item))")
             let n = delegate.window.windowNumber
-            func control(_ code: UInt16) { delegate.window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.control], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!) }
             func shot(_ name: String) {
                 RunLoop.current.run(until: Date().addingTimeInterval(0.6))
                 guard let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
@@ -446,11 +445,11 @@ extension Verification {
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + "." + name + ".png"))
             }
             shot("open")
-            control(123); print("  ⌃←: sidebar hidden \(delegate.sidebarHidden); toggle button still on screen at x \(Int(delegate.sidebarButton.frame.minX)), hidden \(delegate.sidebarButton.isHidden)"); shot("collapsed")
-            control(124); print("  ⌃→: sidebar hidden \(delegate.sidebarHidden)")
+            func command(_ key: String) { _ = NSApp.mainMenu?.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 0)!) }
+            command("s"); print("  ⌘S: sidebar hidden \(delegate.sidebarHidden); toggle button still on screen at x \(Int(delegate.sidebarButton.frame.minX)), hidden \(delegate.sidebarButton.isHidden)"); shot("collapsed")
+            command("s"); print("  ⌘S again: sidebar hidden \(delegate.sidebarHidden)")
             delegate.recentsButton.performClick(nil); print("  recent button: showing recents \(delegate.showingRecents)"); shot("recents")
             delegate.slidesButton.performClick(nil); print("  slides button: showing recents \(delegate.showingRecents)")
-            func command(_ key: String) { _ = NSApp.mainMenu?.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 0)!) }
             command("1"); print("  ⌘1: showing recents \(delegate.showingRecents)"); shot("recents2")
             command("2"); print("  ⌘2: showing recents \(delegate.showingRecents)")
             command("1"); command("e"); print("  ⌘1 then ⌘E: showing recents \(delegate.showingRecents) (⌘E still toggles)"); if delegate.showingRecents { command("2") }

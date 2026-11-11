@@ -27,10 +27,6 @@ final class SlideEditorWindow: NSWindow {
                 if !event.isARepeat { onShortcut(event.keyCode == 125 ? "slideNext" : "slidePrevious") }
                 return
             }
-            if modifiers == .control, [123, 124].contains(event.keyCode) {   // ⌃← hides the sidebar, ⌃→ shows it
-                if !event.isARepeat { onShortcut(event.keyCode == 123 ? "sidebarHide" : "sidebarShow") }
-                return
-            }
             if modifiers == .command, [36, 76].contains(event.keyCode) {
                 if !event.isARepeat { onShortcut("present") }
                 return
