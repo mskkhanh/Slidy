@@ -32,6 +32,9 @@ extension AppDelegate {
         let view = NSMenu(title: "View")
         view.addItem(menuItem("Recent Files", #selector(showRecentFiles), key: "1"))
         view.addItem(menuItem("Slides", #selector(showSlides), key: "2"))
+        view.addItem(menuItem("Filter Files", #selector(focusFilter), key: "k"))
+        view.addItem(menuItem("Collapse All Headings", #selector(collapseAllHeadings)))
+        view.addItem(menuItem("Expand All Headings", #selector(expandAllHeadings)))
         view.addItem(.separator())
         view.addItem(menuItem("Night / Light Mode", #selector(toggleNight), key: "l"))
         view.addItem(menuItem("Hide / Show Sidebar", #selector(toggleSidebar), key: "s"))
@@ -66,6 +69,8 @@ extension AppDelegate {
         recentsButton.contentTintColor = recentsMode ? .labelColor : .tertiaryLabelColor
         slidesButton.contentTintColor = recentsMode ? .tertiaryLabelColor : .labelColor
         headingButton.isHidden = sidebarHidden || !recentsMode   // headings are for the recent files list
+        searchField.isHidden = sidebarHidden || !recentsMode      // so is the filter box
+        scrollTop.constant = recentsMode ? 54 : 28
         headingButton.contentTintColor = .tertiaryLabelColor
         sidebarButton.contentTintColor = sidebarHidden ? .secondaryLabelColor : .tertiaryLabelColor
     }
@@ -87,9 +92,9 @@ extension AppDelegate {
     func setSidebarHidden(_ hidden: Bool, remember: Bool = true, animated: Bool = true) {
         sidebarHidden = hidden
         updateSidebarButtons()
-        emptyRecents.isHidden = hidden || !(recentsMode && sidebarRows.isEmpty)
+        emptyRecents.isHidden = hidden || !(recentsMode && sidebarIsEmpty)
         if remember { UserDefaults.standard.set(hidden, forKey: "sidebarHidden") }
-        let target: CGFloat = hidden ? -Self.sidebarOffset : 0
+        let target: CGFloat = hidden ? -(sidebarWidth + 1) : 0
         guard animated, window?.isVisible == true else {
             sidebarLeading.constant = target
             sidebarViews.forEach { $0.isHidden = hidden }

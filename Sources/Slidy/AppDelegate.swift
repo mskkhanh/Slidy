@@ -1,16 +1,17 @@
 import AppKit
 
 /// App entry: owns the window, the open presentation and its state. Behaviour lives in the AppDelegate+*.swift extensions.
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTableViewDataSource, NSTableViewDelegate, NSTextFieldDelegate, NSMenuDelegate {
     var window: NSWindow!
     let canvas = CanvasView()
-    let table = NSTableView()
+    let table = SidebarTableView()
     let status = NSTextField(labelWithString: "")
     let nightButton = NSButton()
     let playButton = NSButton()
     let fadeAllButton = NSButton()
     let recentsButton = NSButton(), slidesButton = NSButton(), sidebarButton = NSButton(), headingButton = NSButton()
     var toolbarView: NSView?
+    let sidebarResizeHandle = SidebarResizeHandle()
     var sidebarRows: [SidebarRow] = []
     /// The left column shows recent files instead of slide thumbnails (⌘E, or when no file is open).
     var showingRecents = false
@@ -22,7 +23,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var sidebarViews: [NSView] = []
     /// Slides the left column in and out: 0 shows it, -(width + divider) parks it just off the left edge.
     var sidebarLeading: NSLayoutConstraint!
-    static let sidebarOffset: CGFloat = 175
+    /// The width of the left column; drag its right edge to change it (remembered).
+    var sidebarWidth: CGFloat = {
+        let saved = UserDefaults.standard.double(forKey: "sidebarWidth")
+        return saved > 0 ? min(max(CGFloat(saved), AppDelegate.sidebarWidthRange.lowerBound), AppDelegate.sidebarWidthRange.upperBound) : 174
+    }()
+    static let sidebarWidthRange: ClosedRange<CGFloat> = 150...380
+    var sidebarWidthConstraint: NSLayoutConstraint!
+    var scrollTop: NSLayoutConstraint!
+    let searchField = NSSearchField()
+    var searchQuery = ""
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false
     let emptyRecents = NSTextField(wrappingLabelWithString: "No recent files.\nPress ⌘O to open a .pptx.")
@@ -70,8 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "t": self?.addText()
             case "h": self?.addHeading()
             case "present": self?.presentSlides()
-            case "deleteSlide": self?.deleteSlideInDeck(at: self?.index ?? 0)
-            case "newSlide": self?.insertSlideInDeck(after: self?.index ?? 0)
+            case "deleteSlide": if self?.recentsMode == true { NSSound.beep() } else { self?.deleteSlideInDeck(at: self?.index ?? 0) }
+            case "newSlide": if self?.recentsMode == true { self?.activateSelectedSidebarRow() } else { self?.insertSlideInDeck(after: self?.index ?? 0) }
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)
             default: break
@@ -128,8 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         emptyRecents.font = .systemFont(ofSize: 11); emptyRecents.textColor = .tertiaryLabelColor
         emptyRecents.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(emptyRecents)
         NSLayoutConstraint.activate([
-            emptyRecents.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 14), emptyRecents.widthAnchor.constraint(equalToConstant: 146),
-            emptyRecents.topAnchor.constraint(equalTo: root.topAnchor, constant: 40)
+            emptyRecents.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 14), emptyRecents.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -14),
+            emptyRecents.topAnchor.constraint(equalTo: root.topAnchor, constant: 66)
         ])
         NSLayoutConstraint.activate([
             toolbar.topAnchor.constraint(equalTo: root.topAnchor, constant: 7),
@@ -155,14 +165,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             headingButton.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 62)
         ])
         sidebarLeading = scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor)
+        sidebarWidthConstraint = scroll.widthAnchor.constraint(equalToConstant: sidebarWidth)
+        scrollTop = scroll.topAnchor.constraint(equalTo: root.topAnchor, constant: 28)
+        installSidebarExtras(in: root, scroll: scroll, separator: separator)
         NSLayoutConstraint.activate([
             canvas.heightAnchor.constraint(greaterThanOrEqualToConstant: 400),
             canvas.widthAnchor.constraint(greaterThanOrEqualToConstant: 500),
-            sidebarLeading, scroll.topAnchor.constraint(equalTo: root.topAnchor, constant: 28), scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), scroll.widthAnchor.constraint(equalToConstant: 174),
+            sidebarLeading, scrollTop, scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor), sidebarWidthConstraint,
             separator.leadingAnchor.constraint(equalTo: scroll.trailingAnchor), separator.widthAnchor.constraint(equalToConstant: 1), separator.topAnchor.constraint(equalTo: root.topAnchor), separator.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             canvas.leadingAnchor.constraint(equalTo: separator.trailingAnchor), canvas.trailingAnchor.constraint(equalTo: root.trailingAnchor), canvas.topAnchor.constraint(equalTo: root.topAnchor), canvas.bottomAnchor.constraint(equalTo: root.bottomAnchor)
         ])
-        sidebarViews = [scroll, separator, sidebarHeader, recentsButton, slidesButton]
+        sidebarViews = [scroll, separator, sidebarHeader, recentsButton, slidesButton, sidebarResizeHandle]
         setSidebarHidden(sidebarHidden, remember: false, animated: false)
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true

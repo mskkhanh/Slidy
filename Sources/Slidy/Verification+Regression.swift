@@ -398,7 +398,7 @@ extension Verification {
                 guard !shortcutText.contains(where: { $0.hasPrefix(hidden) }) else { throw AppError.message("The shortcut list should leave out \(hidden)") }
             }
             // Only Slidy's own shortcuts: the ones every Mac app has stay out, so the sheet is short.
-            for common in ["⌘C", "⌘Z", "⌘S", "⌘O", "⌘Q", "⌘X", "⌘V"] {
+            for common in ["⌘C", "⌘Z", "⌘O", "⌘Q", "⌘X", "⌘V"] {
                 guard !shortcutText.contains(where: { $0.hasPrefix(common) }) else { throw AppError.message("The shortcut list should leave out the familiar \(common)") }
             }
             guard Shortcuts.sections.flatMap({ $0.items }).count <= 24 else { throw AppError.message("The shortcut list is too long") }

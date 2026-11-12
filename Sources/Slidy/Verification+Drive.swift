@@ -99,12 +99,13 @@ extension Verification {
             let scale = delegate.canvas.surface.frame.width / max(1, delegate.canvas.surface.bounds.width)
             let n = delegate.window.windowNumber
             func mouse(_ type: NSEvent.EventType, _ p: CGPoint) -> NSEvent { NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: n, context: nil, eventNumber: 8, clickCount: 1, pressure: 1)! }
-            func badgeNearCorner() -> CGRect? {   // the badge sits just above the object's top edge, near its right end
-                delegate.canvas.badgeFrames.min { hypot($0.maxX - item.frame.maxX, $0.midY - item.frame.minY) < hypot($1.maxX - item.frame.maxX, $1.midY - item.frame.minY) }
+            func badgeNearCorner() -> CGRect? {   // the badge sits right before the object's first character, near its top-left
+                delegate.canvas.badgeFrames.min { hypot($0.maxX - item.frame.minX, $0.midY - item.frame.minY) < hypot($1.maxX - item.frame.minX, $1.midY - item.frame.minY) }
             }
             func handleRect(_ r: CGRect, scale: CGFloat) -> [CGRect] {   // where resize handles are, with their grab area
                 let reach = 14 / scale
-                return [CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.maxY)].map { CGRect(x: $0.x - reach, y: $0.y - reach, width: reach * 2, height: reach * 2) }
+                let corners = item.imageURL != nil ? [CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY), CGPoint(x: r.minX, y: r.maxY)] : [CGPoint(x: r.maxX, y: r.maxY)]   // only a picture has four handles
+                return corners.map { CGRect(x: $0.x - reach, y: $0.y - reach, width: reach * 2, height: reach * 2) }
             }
             let badgeBefore = badgeNearCorner(), frameBefore = item.frame
             if let badge = badgeBefore {
@@ -130,7 +131,7 @@ extension Verification {
                 print("  press lands on \(type(of: handleHit)) \((handleHit as? ObjectView)?.item.id ?? "")")
                 handleHit.mouseDown(with: mouse(.leftMouseDown, handle)); handleHit.mouseDragged(with: mouse(.leftMouseDragged, handleTo))
                 let duringResize = badgeNearCorner()
-                print("  while resizing: width \(Int(widthBefore)) -> \(Int(item.frame.width)); badge right edge \(Int(beforeResize?.maxX ?? 0)) -> \(Int(duringResize?.maxX ?? 0)) (object right edge \(Int(item.frame.maxX)))")
+                print("  while resizing: width \(Int(widthBefore)) -> \(Int(item.frame.width)); badge left edge \(Int(beforeResize?.minX ?? 0)) -> \(Int(duringResize?.minX ?? 0)) (stays: the object grows to the right)")
                 handleHit.mouseUp(with: mouse(.leftMouseUp, handleTo))
             }
             return
@@ -306,7 +307,7 @@ extension Verification {
             print("  wand: \(plain.count) slides without effects got Fade (\(changed) now have it), \(untouched) slides with effects or no objects untouched, wrong: \(wrong)")
             return
         }
-        if ProcessInfo.processInfo.environment["RECENTS"] != nil {   // a long file name in the recent files list takes two lines
+        if ProcessInfo.processInfo.environment["RECENTS"] != nil {   // a long file name in the recent files list stays on one line (cut with …, full name in the tooltip)
             let long = "/tmp/Buổi học miễn phí 1 2 (13 11) Lập kế hoạch ngày mai trong 5 phút.pptx"
             let short = "/tmp/Ngắn.pptx"
             delegate.recentPresentations = [RecentPresentation(path: long, slide: 0), RecentPresentation(path: short, slide: 0)]
@@ -481,7 +482,8 @@ extension Verification {
             delegate.recentPresentations = names.map { RecentPresentation(path: "/tmp/\($0).pptx", slide: 0) }
             let keys = names.map { RecentPresentation.key("/tmp/\($0).pptx") }
             func rows() -> String { delegate.sidebarRows.map { row -> String in
-                switch row { case .heading(let g): return "[\(g.title)\(g.collapsed ? " +" : "")]"; case .file(let f, let indented): return (indented ? "  " : "") + f.url.deletingPathExtension().lastPathComponent } }.joined(separator: " | ") }
+                switch row { case .heading(let g): return "[\(g.title)\(g.collapsed ? " +" : "")]"; case .file(let f, let indented): return (indented ? "  " : "") + f.url.deletingPathExtension().lastPathComponent
+                case .add: return "(+)" } }.joined(separator: " | ") }
             delegate.showingRecents = true; delegate.updateRecentSidebar()
             print("  start: \(rows())")
             delegate.addSidebarHeading(nil)
@@ -535,6 +537,45 @@ extension Verification {
                 if let rowView = delegate.table.rowView(atRow: row, makeIfNecessary: true) { rowView.mouseExited(with: hoverEvent) }
                 print("  \(name) row ✕: \(buttons.count) button, hidden \(hidden), pointer over \(shown), pointer away \(buttons.map(\.alphaValue))")
             }
+            // Filter: type to narrow the list to matching names (any case, any accents), flat, no headings.
+            delegate.searchQuery = "ECHO"; delegate.updateRecentSidebar(); print("  filter ECHO: \(rows())")
+            delegate.searchQuery = "xyz"; delegate.updateRecentSidebar(); print("  filter xyz: \(rows()) (empty text shown: \(!delegate.emptyRecents.isHidden), \"\(delegate.emptyRecents.stringValue)\")")
+            delegate.searchQuery = ""; delegate.updateRecentSidebar()
+            // Pin: pinned files lead the plain list; unpin puts it back.
+            delegate.togglePin(keys[2]); print("  pinned Charlie: \(rows())")
+            delegate.togglePin(keys[2]); print("  unpinned: \(rows())")
+            // Move to heading from the menu, and out again.
+            let weekA = delegate.recentGroups.first?.id ?? ""
+            delegate.moveRecent(keys[0], toGroup: weekA); print("  Alpha moved under \(delegate.recentGroups.first?.title ?? "?"): \(rows())")
+            delegate.moveRecent(keys[0], toGroup: nil); print("  Alpha moved out: \(rows())")
+            // Right-click menus.
+            let menu = NSMenu()
+            delegate.fillSidebarMenu(menu, row: fileRow); print("  file menu: \(menu.items.map { $0.isSeparatorItem ? "-" : $0.title })")
+            if let move = menu.items.first(where: { $0.title == "Move to Heading" }) { print("  move submenu: \(move.submenu?.items.map { $0.isSeparatorItem ? "-" : $0.title } ?? [])") }
+            delegate.fillSidebarMenu(menu, row: headingRow); print("  heading menu: \(menu.items.map { $0.isSeparatorItem ? "-" : $0.title })")
+            delegate.fillSidebarMenu(menu, row: delegate.sidebarRows.count - 1); print("  menu on the + row: \(menu.items.count) items")
+            // Keyboard: ← folds the selected heading, → opens it, Return folds / opens too; ← on a file steps up to its heading.
+            func arrow(_ code: UInt16) -> Bool { delegate.sidebarKey(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)!) }
+            let h = delegate.sidebarRows.firstIndex { if case .heading(let g) = $0 { return !g.collapsed && !g.keys.isEmpty } else { return false } } ?? 0
+            delegate.table.selectRowIndexes(IndexSet(integer: h), byExtendingSelection: false)
+            _ = arrow(123); print("  ←: \(rows())")
+            _ = arrow(124); print("  →: \(rows())")
+            delegate.table.selectRowIndexes(IndexSet(integer: h), byExtendingSelection: false); delegate.activateSelectedSidebarRow(); print("  Return on heading: \(rows())")
+            delegate.table.selectRowIndexes(IndexSet(integer: delegate.sidebarRows.firstIndex { if case .heading = $0 { return true } else { return false } } ?? 0), byExtendingSelection: false); delegate.activateSelectedSidebarRow()
+            delegate.collapseAllHeadings(); print("  collapse all: \(rows())")
+            delegate.expandAllHeadings(); print("  expand all: \(rows())")
+            // Width: drag the divider; limits hold.
+            let before = delegate.sidebarWidth
+            delegate.setSidebarWidth(260); delegate.window.layoutIfNeeded()
+            let wide = delegate.table.enclosingScrollView?.frame.width ?? 0
+            delegate.setSidebarWidth(50); delegate.window.layoutIfNeeded()
+            let narrow = delegate.table.enclosingScrollView?.frame.width ?? 0
+            delegate.setSidebarWidth(900); delegate.window.layoutIfNeeded()
+            print("  width: \(Int(before)) -> \(Int(wide)) (asked 260), \(Int(narrow)) (asked 50), \(Int(delegate.table.enclosingScrollView?.frame.width ?? 0)) (asked 900); saved \(UserDefaults.standard.double(forKey: "sidebarWidth"))")
+            delegate.setSidebarWidth(before)
+            // Dates on the right.
+            let now = Date(); let cal = Calendar.current
+            print("  dates: today \(AppDelegate.shortDate(now)), 2 days \(AppDelegate.shortDate(cal.date(byAdding: .day, value: -2, to: now)!)), 10 days \(AppDelegate.shortDate(cal.date(byAdding: .day, value: -10, to: now)!)), last year \(AppDelegate.shortDate(cal.date(byAdding: .year, value: -1, to: now)!))")
             // Persisted, and the file list itself is untouched.
             print("  saved headings: \(delegate.recentGroups.map { "\($0.title)=\($0.keys.count)" }), recent files still \(delegate.recentPresentations.count)")
             // Renaming a file under a heading keeps it there; removing a file takes it out of the heading.
@@ -544,6 +585,16 @@ extension Verification {
             let many = (0..<30).map { RecentPresentation(path: "/tmp/F\($0).pptx", slide: 0) } + delegate.recentPresentations
             let trimmed = delegate.trimmedRecents(many)
             print("  trim: \(trimmed.count) kept of \(many.count); grouped kept: \(delegate.recentGroups.flatMap(\.keys).filter { key in many.contains { $0.key == key } }.allSatisfy { key in trimmed.contains { $0.key == key } })")
+            // A picture of the list with real files (dates), a heading, the open file and a hovered row.
+            let decks = [".fixtures/deck1.pptx", ".fixtures/deck2.pptx"].map { URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent($0).path }
+            delegate.recentGroups = [RecentGroup(id: "g", title: "Buổi học", collapsed: false, keys: [RecentPresentation.key(decks[1])])]
+            delegate.recentPresentations = [RecentPresentation(path: arguments[0], slide: 0), RecentPresentation(path: decks[0], slide: 0), RecentPresentation(path: decks[1], slide: 0), RecentPresentation(path: "/tmp/Một tên file rất dài để thử cắt đuôi bằng dấu ba chấm.pptx", slide: 0)]
+            delegate.pinnedKeys = [RecentPresentation.key(decks[0])]
+            delegate.setSidebarWidth(230); delegate.updateRecentSidebar(); delegate.window.layoutIfNeeded()
+            delegate.table.rowView(atRow: 2, makeIfNecessary: true)?.mouseEntered(with: hoverEvent)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".sidebar.png")) }
+            delegate.pinnedKeys = []; delegate.setSidebarWidth(174)
             // Removing a heading sends its files back to the plain list.
             let removeButton = NSButton(); removeButton.tag = first
             delegate.recentGroups = delegate.recentGroups.filter { $0.id != delegate.recentGroup(at: first)?.id }; delegate.updateRecentSidebar()

@@ -15,6 +15,8 @@ struct RecentGroup: Codable {
 enum SidebarRow {
     case file(RecentPresentation, indented: Bool)
     case heading(RecentGroup)
+    /// The quiet "+ New heading" row at the end of the list.
+    case add
 }
 
 extension AppDelegate {
@@ -31,17 +33,42 @@ extension AppDelegate {
             if let data = try? JSONEncoder().encode(newValue) { UserDefaults.standard.set(data, forKey: Self.groupsKey) }
         }
     }
-    /// Files that are not under a heading come first (newest first); each heading follows with its files.
+    static let pinnedKey = "recentPinned"
+    /// Pinned files stay at the top of the plain list, in the order they were pinned.
+    var pinnedKeys: [String] {
+        get { UserDefaults.standard.stringArray(forKey: Self.pinnedKey) ?? [] }
+        set { UserDefaults.standard.set(newValue, forKey: Self.pinnedKey) }
+    }
+    /// Typing in the filter box shows the matching files as one flat list (no headings).
+    func fileMatchesFilter(_ file: RecentPresentation) -> Bool {
+        let query = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return true }
+        return file.url.deletingPathExtension().lastPathComponent.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+    var isFiltering: Bool { !searchQuery.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// Pinned files first, then the rest, each group in its own order; with a filter, only the matches.
     func buildSidebarRows() -> [SidebarRow] {
-        let recents = recentPresentations, groups = recentGroups
+        let recents = recentPresentations, groups = recentGroups, pinned = pinnedKeys
+        if isFiltering {
+            let matches = recents.filter(fileMatchesFilter)
+            let ordered = matches.filter { pinned.contains($0.key) } + matches.filter { !pinned.contains($0.key) }
+            return ordered.map { .file($0, indented: false) }
+        }
         let grouped = Set(groups.flatMap(\.keys))
-        var rows: [SidebarRow] = recents.filter { !grouped.contains($0.key) }.map { .file($0, indented: false) }
+        let plain = recents.filter { !grouped.contains($0.key) }
+        var rows: [SidebarRow] = pinned.compactMap { key in plain.first { $0.key == key } }.map { .file($0, indented: false) }
+        rows += plain.filter { !pinned.contains($0.key) }.map { .file($0, indented: false) }
         for group in groups {
             rows.append(.heading(group))
             guard !group.collapsed else { continue }
             for key in group.keys { if let file = recents.first(where: { $0.key == key }) { rows.append(.file(file, indented: true)) } }
         }
+        rows.append(.add)
         return rows
+    }
+    /// True when there is nothing to show (no files, no headings).
+    var sidebarIsEmpty: Bool {
+        !sidebarRows.contains { if case .add = $0 { return false } else { return true } }
     }
     func recentFile(at row: Int) -> RecentPresentation? {
         guard sidebarRows.indices.contains(row), case .file(let file, _) = sidebarRows[row] else { return nil }
@@ -62,6 +89,8 @@ extension AppDelegate {
     }
     /// A file that was renamed or removed: its place under a heading follows (or goes).
     func replaceGroupKey(_ old: String, with new: String?) {
+        var pinned = pinnedKeys
+        if let at = pinned.firstIndex(of: old) { if let new, !pinned.contains(new) { pinned[at] = new } else { pinned.remove(at: at) }; pinnedKeys = pinned }
         var groups = recentGroups
         for index in groups.indices {
             guard let at = groups[index].keys.firstIndex(of: old) else { continue }
@@ -118,35 +147,9 @@ extension AppDelegate {
         recentGroups = groups
     }
 
-    // MARK: Cells
-    func headingCell(for group: RecentGroup, row: Int) -> NSView {
-        let cell = NSTableCellView()
-        let chevron = NSButton(image: NSImage(systemSymbolName: group.collapsed ? "chevron.right" : "chevron.down", accessibilityDescription: group.collapsed ? "Expand" : "Collapse") ?? NSImage(), target: self, action: #selector(toggleGroup(_:)))
-        chevron.isBordered = false; chevron.contentTintColor = .secondaryLabelColor; chevron.tag = row
-        chevron.toolTip = group.collapsed ? "Expand" : "Collapse"; chevron.imageScaling = .scaleProportionallyDown
-        let label = NSTextField(labelWithString: group.title)
-        label.font = .systemFont(ofSize: 11, weight: .semibold); label.textColor = .secondaryLabelColor
-        label.lineBreakMode = .byTruncatingTail
-        label.cell?.truncatesLastVisibleLine = true
-        let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove heading") ?? NSImage(), target: self, action: #selector(removeGroup(_:)))
-        remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
-        remove.toolTip = "Remove heading (files stay in the list)"; remove.imageScaling = .scaleProportionallyDown
-        remove.identifier = HoverReveal.identifier; remove.alphaValue = 0   // shown while the pointer is over the row
-        for view in [chevron, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
-        NSLayoutConstraint.activate([
-            chevron.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6), chevron.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            chevron.widthAnchor.constraint(equalToConstant: 14), chevron.heightAnchor.constraint(equalToConstant: 14),
-            remove.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6), remove.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            remove.widthAnchor.constraint(equalToConstant: 18), remove.heightAnchor.constraint(equalToConstant: 18),
-            label.leadingAnchor.constraint(equalTo: chevron.trailingAnchor, constant: 4), label.trailingAnchor.constraint(equalTo: remove.leadingAnchor, constant: -4),
-            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-        ])
-        cell.toolTip = "Double-click to rename. Drag files under it."
-        return cell
-    }
-
     // MARK: Drag and drop in the recent list
     func recentPasteboardWriter(row: Int) -> NSPasteboardWriting? {
+        guard !isFiltering else { return nil }
         let item = NSPasteboardItem()
         if let file = recentFile(at: row) { item.setString("file:" + file.key, forType: Self.recentRowType) }
         else if let group = recentGroup(at: row) { item.setString("group:" + group.id, forType: Self.recentRowType) }
@@ -164,7 +167,7 @@ extension AppDelegate {
         return (nil, 0)
     }
     func recentValidateDrop(_ info: NSDraggingInfo, row: Int, operation: NSTableView.DropOperation) -> NSDragOperation {
-        guard info.draggingSource as? NSTableView === table, let value = info.draggingPasteboard.string(forType: Self.recentRowType) else { return [] }
+        guard !isFiltering, info.draggingSource as? NSTableView === table, let value = info.draggingPasteboard.string(forType: Self.recentRowType) else { return [] }
         if value.hasPrefix("file:") {
             if operation == .on, recentGroup(at: row) != nil { return .move }   // dropped on a heading: goes in at the end
             table.setDropRow(min(row, sidebarRows.count), dropOperation: .above)
@@ -175,10 +178,8 @@ extension AppDelegate {
         let groups = recentGroups
         guard let from = groups.firstIndex(where: { $0.id == id }) else { return [] }
         var to = groups.count
-        if row < sidebarRows.count {
-            guard let heading = recentGroup(at: row), let index = groups.firstIndex(where: { $0.id == heading.id }) else { return [] }
-            to = index
-        }
+        if let heading = recentGroup(at: row), let index = groups.firstIndex(where: { $0.id == heading.id }) { to = index }
+        else if row < sidebarRows.count - 1 { return [] }   // only between headings, or at the end (before the "+" row)
         guard to != from, to != from + 1 else { return [] }
         table.setDropRow(row, dropOperation: .above)
         return .move

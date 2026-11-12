@@ -49,60 +49,25 @@ extension AppDelegate {
             table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         }
         suppressSelectionOpen = false
-        emptyRecents.isHidden = sidebarHidden || !(recentsMode && sidebarRows.isEmpty)
+        emptyRecents.stringValue = isFiltering ? "No matching files." : "No recent files.\nPress ⌘O to open a .pptx."
+        emptyRecents.isHidden = sidebarHidden || !(recentsMode && sidebarIsEmpty)
     }
     func numberOfRows(in tableView: NSTableView) -> Int {
         if let presentation, !showingRecents { return presentation.slides.count }
         return sidebarRows.count
     }
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
-    private static let recentFont = NSFont.systemFont(ofSize: 12)
-    private static let recentLabelWidth: CGFloat = 120
-    /// Recent files sit close together; a long name takes a second line before it is truncated.
+    /// One line per file; the full name is in the tooltip.
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
         if presentation != nil, !showingRecents { return 106 }
-        if recentGroup(at: row) != nil { return 26 }
-        guard let file = recentFile(at: row) else { return 28 }
-        let name = file.url.deletingPathExtension().lastPathComponent
-        let box = (name as NSString).boundingRect(with: NSSize(width: Self.recentLabelWidth, height: 1000),
-                                                  options: [.usesLineFragmentOrigin], attributes: [.font: Self.recentFont])
-        return box.height > 20 ? 40 : 26
+        return 26
     }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let presentation, !showingRecents else {
             if let group = recentGroup(at: row) { return headingCell(for: group, row: row) }
-            guard let entry = recentFile(at: row) else { return nil }
-            var indent: CGFloat = 0
-            if case .file(_, let indented) = sidebarRows[row], indented { indent = 12 }   // under a heading
-            let cell = NSTableCellView()
-            cell.toolTip = entry.path
-            let symbol = NSImage(systemSymbolName: "play.rectangle.on.rectangle", accessibilityDescription: nil)
-                ?? NSImage(systemSymbolName: "rectangle.on.rectangle", accessibilityDescription: nil) ?? NSImage()
-            let icon = NSImageView(image: symbol)
-            icon.contentTintColor = NSColor(red: 0.50, green: 0.68, blue: 0.96, alpha: 1)
-            let label = NSTextField(wrappingLabelWithString: entry.url.deletingPathExtension().lastPathComponent)
-            label.font = Self.recentFont
-            // Word-wrap onto two lines; only the last visible line gets the "…". (A tail-truncating line break would
-            // squeeze the name onto a single line.)
-            label.maximumNumberOfLines = 2
-            label.lineBreakMode = .byWordWrapping
-            label.cell?.truncatesLastVisibleLine = true
-            if !entry.exists { label.textColor = .tertiaryLabelColor; cell.toolTip = entry.path + "\nFile not found" }
-            label.preferredMaxLayoutWidth = Self.recentLabelWidth
-            let remove = NSButton(image: NSImage(systemSymbolName: "xmark", accessibilityDescription: "Remove from list") ?? NSImage(), target: self, action: #selector(removeRecent(_:)))
-            remove.isBordered = false; remove.contentTintColor = .tertiaryLabelColor; remove.tag = row
-            remove.toolTip = "Remove from list"
-            remove.identifier = HoverReveal.identifier; remove.alphaValue = 0   // shown while the pointer is over the row
-            remove.imageScaling = .scaleProportionallyDown
-            for view in [icon, label, remove] { view.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(view) }
-            NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8 + indent), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16),
-                remove.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6), remove.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                remove.widthAnchor.constraint(equalToConstant: 18), remove.heightAnchor.constraint(equalToConstant: 18),
-                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6), label.trailingAnchor.constraint(equalTo: remove.leadingAnchor, constant: -4),
-                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
-            ])
-            return cell
+            if case .add = sidebarRows[row] { return addRowCell() }
+            guard let entry = recentFile(at: row), case .file(_, let indented) = sidebarRows[row] else { return nil }
+            return fileCell(for: entry, row: row, indented: indented)
         }
         let cell = NSTableCellView(frame: NSRect(x: 0, y: 0, width: 154, height: 106))
         let image = NSImageView(frame: NSRect(x: 8, y: 17, width: 146, height: 82)); image.imageScaling = .scaleProportionallyUpOrDown
@@ -173,7 +138,9 @@ extension AppDelegate {
     @objc func recentClicked() {
         guard recentsMode, renameField == nil else { return }
         let row = table.clickedRow
-        guard row >= 0, recentFile(at: row) != nil else { return }   // a heading does nothing on a single click
+        guard row >= 0 else { return }
+        if case .add = sidebarRows[row] { addSidebarHeading(nil); return }
+        guard recentFile(at: row) != nil else { return }   // a heading does nothing on a single click
         pendingRecentOpen?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.openRecent(row: row) }
         pendingRecentOpen = work

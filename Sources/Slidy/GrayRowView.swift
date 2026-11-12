@@ -26,6 +26,7 @@ final class GrayRowView: NSTableRowView {
         func visit(_ view: NSView) {
             for child in view.subviews {
                 if child.identifier == HoverReveal.identifier { child.alphaValue = shown ? 1 : 0 }
+                if child.identifier == HoverReveal.hideIdentifier { child.alphaValue = shown ? 0 : 1 }
                 visit(child)
             }
         }
@@ -37,4 +38,6 @@ final class GrayRowView: NSTableRowView {
 
 enum HoverReveal {
     static let identifier = NSUserInterfaceItemIdentifier("hoverReveal")
+    /// Small gray text (date, count) that gives way to the ✕ while the pointer is over the row.
+    static let hideIdentifier = NSUserInterfaceItemIdentifier("hoverHide")
 }

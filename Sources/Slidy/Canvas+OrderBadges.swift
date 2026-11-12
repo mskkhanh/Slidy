@@ -17,6 +17,8 @@ extension CanvasView {
                 // which can be much taller). Anything else (a picture, a shape): just left of its top-left corner.
                 let gap = 3 / surfaceScale
                 var frame = CGRect(x: item.frame.minX - width - gap, y: item.frame.minY, width: width, height: diameter)
+                // A picture has resize handles on all four corners, so its number sits above the top edge, past the corner handle.
+                if item.imageURL != nil { frame.origin = CGPoint(x: item.frame.minX + 16 / surfaceScale, y: item.frame.minY - diameter - gap) }
                 if !item.text.isEmpty, let first = layoutParagraphs(item).first(where: { $0.storage.length > 0 }) {
                     let glyphs = first.manager.glyphRange(for: first.container)
                     if glyphs.length > 0 {
