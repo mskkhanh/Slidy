@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var sidebarWidthConstraint: NSLayoutConstraint!
     var scrollTop: NSLayoutConstraint!
     let searchField = NSSearchField()
+    let slideCountLabel = NSTextField(labelWithString: "")
     var searchQuery = ""
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false
@@ -80,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             case "t": self?.addText()
             case "h": self?.addHeading()
             case "present": self?.presentSlides()
-            case "deleteSlide": if self?.recentsMode == true { NSSound.beep() } else { self?.deleteSlideInDeck(at: self?.index ?? 0) }
+            case "deleteSlide": if self?.recentsMode == true { NSSound.beep() } else { self?.deleteSelectedSlides() }
             case "newSlide": if self?.recentsMode == true { self?.activateSelectedSidebarRow() } else { self?.insertSlideInDeck(after: self?.index ?? 0) }
             case "slideNext": self?.moveSlide(by: 1)
             case "slidePrevious": self?.moveSlide(by: -1)
@@ -179,6 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         setSidebarHidden(sidebarHidden, remember: false, animated: false)
         canvas.showsOrderBadges = true
         canvas.usesNightMode = true
+        canvas.showsEdgeShade = true
         canvas.onMoveLayer = { [weak self] delta in self?.moveLayer(by: delta) }
         canvas.onReorderFade = { [weak self] delta in self?.reorderFade(by: delta) }
         canvas.onOpenFile = { [weak self] in self?.openFile() }

@@ -70,6 +70,9 @@ extension AppDelegate {
         slidesButton.contentTintColor = recentsMode ? .tertiaryLabelColor : .labelColor
         headingButton.isHidden = sidebarHidden || !recentsMode   // headings are for the recent files list
         searchField.isHidden = sidebarHidden || !recentsMode      // so is the filter box
+        let count = presentation?.slides.count ?? 0
+        slideCountLabel.stringValue = count == 1 ? "1 slide" : "\(count) slides"
+        slideCountLabel.isHidden = sidebarHidden || recentsMode || count == 0
         scrollTop.constant = recentsMode ? 54 : 28
         headingButton.contentTintColor = .tertiaryLabelColor
         sidebarButton.contentTintColor = sidebarHidden ? .secondaryLabelColor : .tertiaryLabelColor

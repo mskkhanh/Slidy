@@ -40,6 +40,7 @@ extension AppDelegate {
         sidebarRows = buildSidebarRows()
         updateSidebarButtons()
         table.setAccessibilityLabel("Recent files")
+        table.allowsMultipleSelection = false
         table.rowHeight = 28; table.intercellSpacing = NSSize(width: 0, height: 1)
         table.reloadData()
         // The open file is highlighted without being "clicked" (which would reopen it).
@@ -56,10 +57,12 @@ extension AppDelegate {
         if let presentation, !showingRecents { return presentation.slides.count }
         return sidebarRows.count
     }
-    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { GrayRowView() }
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        recentsMode ? GrayRowView() : SlideRowView()
+    }
     /// One line per file; the full name is in the tooltip.
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        if presentation != nil, !showingRecents { return 106 }
+        if presentation != nil, !showingRecents { return SlideThumb.rowHeight(columnWidth: max(tableView.bounds.width, sidebarWidth)) }
         return 26
     }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -69,26 +72,20 @@ extension AppDelegate {
             guard let entry = recentFile(at: row), case .file(_, let indented) = sidebarRows[row] else { return nil }
             return fileCell(for: entry, row: row, indented: indented)
         }
-        let cell = NSTableCellView(frame: NSRect(x: 0, y: 0, width: 154, height: 106))
-        let image = NSImageView(frame: NSRect(x: 8, y: 17, width: 146, height: 82)); image.imageScaling = .scaleProportionallyUpOrDown
-        image.image = thumbnail(row); cell.addSubview(image)
-        let label = NSTextField(labelWithString: "\(row + 1)/\(presentation.slides.count)"); label.frame = NSRect(x: 8, y: 0, width: 146, height: 15); label.font = .systemFont(ofSize: 10); label.textColor = .secondaryLabelColor
-        cell.addSubview(label); cell.textField = label
-        cell.setAccessibilityLabel("Slide \(row + 1). \(presentation.slides[row].title)")
-        return cell
+        return SlideThumbCell(row: row, thumbnail: thumbnail(row), slide: presentation.slides[row], presenting: showWindow != nil && showIndex == row)
     }
     func thumbnail(_ row: Int) -> NSImage? {
         if let cached = thumbnailCache.object(forKey: NSNumber(value: row)) { return cached }
         guard let presentation else { return nil }
         let slide = presentation.slides[row]
-        let preview = CanvasView(frame: NSRect(x: 0, y: 0, width: 292, height: 164))
+        let preview = CanvasView(frame: NSRect(x: 0, y: 0, width: 292, height: (292 * SlideThumb.aspect).rounded()))
         preview.usesNightMode = true
         preview.display(slide, in: presentation); preview.layoutSubtreeIfNeeded()
         // Render without editor margins and without enabling presentation animation.
         preview.surface.frame = preview.bounds; preview.surface.bounds = CGRect(origin: .zero, size: presentation.size)
         guard let bitmap = preview.bitmapImageRepForCachingDisplay(in: preview.bounds) else { return nil }
         preview.cacheDisplay(in: preview.bounds, to: bitmap)
-        let result = NSImage(size: NSSize(width: 146, height: 82)); result.addRepresentation(bitmap)
+        let result = NSImage(size: NSSize(width: 146, height: (146 * SlideThumb.aspect).rounded())); result.addRepresentation(bitmap)
         thumbnailCache.setObject(result, forKey: NSNumber(value: row)); return result
     }
     // Drag and drop: reorder slides by dragging a thumbnail; a line shows where it will land.
@@ -100,28 +97,31 @@ extension AppDelegate {
     }
     func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
         if recentsMode { return busy ? nil : recentPasteboardWriter(row: row) }
-        guard presentation != nil, !showingRecents, !busy else { return nil }
+        guard presentation != nil, !showingRecents, !busy else { return nil }   // with several slides selected, each one is written
         let item = NSPasteboardItem(); item.setString(String(row), forType: Self.slideRowType); return item
     }
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
         if recentsMode { return recentValidateDrop(info, row: row, operation: operation) }
-        guard let presentation, !showingRecents, info.draggingSource as? NSTableView === table,
-              let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
-              Self.slideDropTarget(source: source, row: row) != nil, row <= presentation.slides.count else { return [] }
+        guard let presentation, !showingRecents, info.draggingSource as? NSTableView === table, row <= presentation.slides.count,
+              Self.slideMoveOrder(sources: draggedSlideRows(info), row: row, count: presentation.slides.count) != nil else { return [] }
         tableView.setDropRow(row, dropOperation: .above)
         return .move
     }
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
         if recentsMode { return recentAcceptDrop(info, row: row, operation: dropOperation) }
-        guard let value = info.draggingPasteboard.string(forType: Self.slideRowType), let source = Int(value),
-              let target = Self.slideDropTarget(source: source, row: row) else { return false }
-        DispatchQueue.main.async { [weak self] in self?.moveSlideInDeck(from: source, to: target) }   // after the drop finishes
+        let sources = draggedSlideRows(info)
+        guard !sources.isEmpty, let count = presentation?.slides.count, Self.slideMoveOrder(sources: sources, row: row, count: count) != nil else { return false }
+        DispatchQueue.main.async { [weak self] in self?.moveSlides(sources, before: row) }   // after the drop finishes
         return true
+    }
+    func draggedSlideRows(_ info: NSDraggingInfo) -> [Int] {
+        (info.draggingPasteboard.pasteboardItems ?? []).compactMap { $0.string(forType: Self.slideRowType) }.compactMap { Int($0) }.sorted()
     }
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard table.selectedRow >= 0, !busy, !suppressSelectionOpen else { return }
         guard let presentation, !showingRecents else { return }   // recent files open from a click (see recentClicked)
         canvas.finishEditing(commit: true); index = table.selectedRow
+        table.scrollRowToVisible(index)
         canvas.display(presentation.slides[index], in: presentation)
         updateStatus()
         enforceStandardListSpacing([presentation.slides[index]])
@@ -210,7 +210,7 @@ extension AppDelegate {
         guard let presentation else { return }
         table.setAccessibilityLabel("Slides")
         updateSidebarButtons()
-        table.rowHeight = 106; table.intercellSpacing = NSSize(width: 0, height: 4)
+        table.rowHeight = 60; table.intercellSpacing = NSSize(width: 0, height: 0); table.allowsMultipleSelection = true
         table.reloadData()
         table.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
         table.scrollRowToVisible(index)

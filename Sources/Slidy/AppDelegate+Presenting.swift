@@ -14,7 +14,7 @@ extension AppDelegate {
         let number = SlideNumberLabel(); number.translatesAutoresizingMaskIntoConstraints = false
         playerCanvas.addSubview(number)
         NSLayoutConstraint.activate([number.leadingAnchor.constraint(equalTo: playerCanvas.leadingAnchor, constant: 16), number.bottomAnchor.constraint(equalTo: playerCanvas.bottomAnchor, constant: -12)])
-        showNumber = number; updateShowNumber()
+        showNumber = number; updateShowNumber(); refreshPresentingDot(old: nil)
         playerCanvas.onNavigate = { [weak self] direction in self?.navigateShow(direction) }
         playerCanvas.onJumpSlide = { [weak self] direction in self?.navigateShow(direction, complete: true) }
         playerCanvas.onExit = { [weak self] in self?.endShow() }
@@ -23,8 +23,13 @@ extension AppDelegate {
         player.makeKeyAndOrderFront(nil); player.makeFirstResponder(playerCanvas)
     }
     func navigateShow(_ direction: Int, complete: Bool = false) {
-        guard let presentation, presentation.slides.indices.contains(showIndex + direction) else { return }
-        showIndex += direction; showCanvas?.display(presentation.slides[showIndex], in: presentation, presenting: true)
+        guard let presentation else { return }
+        var next = showIndex + direction
+        while presentation.slides.indices.contains(next), presentation.slides[next].isHidden { next += direction }   // hidden slides are skipped
+        guard presentation.slides.indices.contains(next) else { return }
+        let previous = showIndex
+        showIndex = next; refreshPresentingDot(old: previous)
+        showCanvas?.display(presentation.slides[showIndex], in: presentation, presenting: true)
         // Coming back to an earlier slide, or jumping with ⌘↑/⌘↓, shows it complete with every effect already revealed.
         if direction < 0 || complete { showCanvas?.revealAll() }
         updateShowNumber()
@@ -33,5 +38,17 @@ extension AppDelegate {
         guard let presentation else { return }
         showNumber?.stringValue = "\(showIndex + 1)/\(presentation.slides.count)"
     }
-    func endShow() { showWindow?.close(); showWindow = nil; showCanvas = nil; showNumber = nil; window.makeKeyAndOrderFront(nil) }
+    func endShow() {
+        let last = showIndex
+        showWindow?.close(); showWindow = nil; showCanvas = nil; showNumber = nil; window.makeKeyAndOrderFront(nil)
+        refreshPresentingDot(old: last)
+    }
+    /// The small dot beside the slide that is on screen while presenting.
+    func refreshPresentingDot(old: Int?) {
+        guard presentation != nil, !recentsMode else { return }
+        var rows = IndexSet(integer: showIndex)
+        if let old { rows.insert(old) }
+        rows = rows.filteredIndexSet { $0 < table.numberOfRows }
+        table.reloadData(forRowIndexes: rows, columnIndexes: IndexSet(integer: 0))
+    }
 }

@@ -16,6 +16,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Pinch to zoom around the pointer (⌘0 fits the slide); moving or resizing objects shows alignment guides that snap to other objects and the slide edges/centre (hold ⌘ to move freely).
 - Press Delete (⌫) in the slide list to delete the selected slide (notes and unused media go too; ⌘Z restores everything).
 - ⌘1 (or ⌘E) shows the recent files, ⌘2 the slides of the current file; the matching buttons sit at the top left of the sidebar, the hide / show button at its top right.
+- The slide list: a modest centered thumbnail with a thin border and the slide number beside it (the total sits at the bottom). The selected slides get a blue ring, the pointer a faint one; a sparkle badge marks slides with Fade effects, a crossed eye hidden ones, a blue dot the slide being presented. ⇧-click or ⌘-click selects several slides; drag them together (a line shows where they land); Delete removes them (⌘Z brings them back); right-click: Duplicate, Hide / Show, Delete. A hidden slide stays in the file (`show="0"`) and is skipped while presenting.
 - The recent files list (⌘1 or ⌘E): one line per file with the full name in the tooltip, a quiet dot, the modified date on the right (a ✕ replaces it while the pointer is over the row), a thin blue bar on the open file. Drag its right edge to make the column wider or narrower (remembered). ⌘K filters by name. Right-click a file: Open, Rename, Pin to Top, Move to Heading, Show in Finder, Remove from List. ↑ ↓ choose a row, Return opens it.
 - Headings in the list work like folders: the folder button (top of the sidebar) or the "+" row at the end adds one, double-click renames it, drag files under it (or drag it to reorder headings), ← → or the chevron fold it, right-click it for Collapse All / Expand All, ✕ removes only the heading. They live in the app's settings; no .pptx is touched.
 - In the recent files list double-click a name to rename the file on disk (only the part before .pptx can change; Return confirms, Esc cancels).
@@ -62,6 +63,8 @@ Sources/Slidy/
   AppDelegate+Editing.swift      insert, paste, layer order, delete
   AppDelegate+Fade.swift         Fade: toggle, tables, groups, order, the wand button
   AppDelegate+Slides.swift       slides in the deck: move, add, delete, restore
+  AppDelegate+SlideActions.swift delete / duplicate / hide the selected slides, the slide list menu
+  SlideThumbs.swift              slide list rows: thumbnail cell, selection ring, hidden slides
   AppDelegate+Presenting.swift   full-screen presentation
   Canvas.swift                   the slide canvas: state, zoom, selection, keys, playback
   Canvas+Drag.swift              mouse: select, drag, resize, snapping guides

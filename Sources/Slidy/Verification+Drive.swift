@@ -601,6 +601,75 @@ extension Verification {
             print("  heading removed: \(rows())")
             return
         }
+        if ProcessInfo.processInfo.environment["SLIDES"] != nil {   // the slide list: thumbnails, several slides at once, duplicate, hide, delete, drag
+            let url = URL(fileURLWithPath: arguments[0])
+            func titles() -> String { presentation.slides.map { String($0.title.prefix(6)) }.joined(separator: "|") }
+            func reopened() -> Presentation? { delegate.flushSave(); return try? Presentation(url: url) }
+            let count = presentation.slides.count
+            delegate.window.layoutIfNeeded()
+            let width = delegate.table.bounds.width
+            print("  \(count) slides; column \(Int(width)) wide, thumbnail \(SlideThumb.frame(in: NSRect(x: 0, y: 0, width: width, height: 0)).integral.size), row height \(Int(SlideThumb.rowHeight(columnWidth: width))); label \"\(delegate.slideCountLabel.stringValue)\" shown \(!delegate.slideCountLabel.isHidden)")
+            let ratio = SlideThumb.frame(in: NSRect(x: 0, y: 0, width: width, height: 0)).width / width
+            print("  thumbnail is \(Int((ratio * 100).rounded())) % of the column, centered: \(abs(SlideThumb.frame(in: NSRect(x: 0, y: 0, width: width, height: 0)).midX - width / 2) < 1)")
+            let first = titles()
+            // Several slides selected: the menu works on all of them.
+            delegate.table.selectRowIndexes(IndexSet([1, 3]), byExtendingSelection: false)
+            let menu = NSMenu(); delegate.fillSlideMenu(menu, row: 1)
+            print("  menu on 2 selected slides: \(menu.items.map { $0.isSeparatorItem ? "-" : $0.title })")
+            // Duplicate both: copies follow their originals, one ⌘Z removes them, the file stays valid.
+            delegate.duplicateSelectedSlides()
+            print("  duplicate: \(count) -> \(presentation.slides.count) slides, copies selected \(delegate.selectedSlideRows)")
+            let doubled = titles()
+            let again = reopened()
+            print("  saved and reopened: \(again?.slides.count ?? -1) slides, same titles \(again.map { $0.slides.map { String($0.title.prefix(6)) }.joined(separator: "|") == doubled } ?? false), no notes copied \(!(again?.slides[2].document.xmlString.isEmpty ?? true))")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.undo.undo(); print("  undo: \(presentation.slides.count) slides, titles back \(titles() == first)")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            // Hide two slides: dimmed with a badge, saved as show="0", skipped while presenting.
+            delegate.table.selectRowIndexes(IndexSet([1, 2]), byExtendingSelection: false)
+            delegate.toggleHideSelectedSlides()
+            let hiddenNow = presentation.slides.enumerated().filter { $0.element.isHidden }.map(\.offset)
+            let saved = reopened()
+            print("  hide: slides \(hiddenNow.map { $0 + 1 }) hidden, saved \(saved?.slides.enumerated().filter { $0.element.isHidden }.map { $0.offset + 1 } ?? []), xml has show=\"0\" \(presentation.slides[1].document.rootElement()?.attr("show") == "0")")
+            delegate.table.selectRowIndexes(IndexSet([0]), byExtendingSelection: false)
+            delegate.showIndex = 0; delegate.navigateShow(1)
+            print("  presenting forward from slide 1 lands on slide \(delegate.showIndex + 1) (hidden 2 and 3 are skipped)")
+            delegate.showIndex = 3; delegate.navigateShow(-1)
+            print("  presenting back from slide 4 lands on slide \(delegate.showIndex + 1)")
+            delegate.table.selectRowIndexes(IndexSet([1, 2]), byExtendingSelection: false)
+            let hiddenMenu = NSMenu(); delegate.fillSlideMenu(hiddenMenu, row: 1)
+            print("  menu on hidden slides: \(hiddenMenu.items.map { $0.isSeparatorItem ? "-" : $0.title })")
+            delegate.toggleHideSelectedSlides(); print("  show again: hidden \(presentation.slides.filter(\.isHidden).count)")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.undo.undo(); delegate.undo.undo()
+            print("  undo twice: hidden \(presentation.slides.filter(\.isHidden).count)")
+            // Delete two slides at once, never every slide; one ⌘Z brings them back.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.table.selectRowIndexes(IndexSet([1, 3]), byExtendingSelection: false)
+            delegate.deleteSelectedSlides()
+            print("  delete 2: \(count) -> \(presentation.slides.count) slides")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.undo.undo(); print("  undo: \(presentation.slides.count) slides, titles back \(titles() == first)")
+            delegate.table.selectRowIndexes(IndexSet(0..<count), byExtendingSelection: false); delegate.deleteSelectedSlides(); print("  delete all: still \(presentation.slides.count) slides")
+            // Drag two slides together to a new place.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            print("  drop order for [1,3] before 6: \(AppDelegate.slideMoveOrder(sources: [1, 3], row: 6, count: count) ?? [])")
+            print("  drop that changes nothing: \(AppDelegate.slideMoveOrder(sources: [2, 3], row: 2, count: count) == nil), \(AppDelegate.slideMoveOrder(sources: [2, 3], row: 4, count: count) == nil), single like before \(AppDelegate.slideMoveOrder(sources: [3], row: 1, count: count)?.prefix(4) ?? [])")
+            delegate.moveSlides([1, 3], before: 6)
+            print("  moved: \(titles()) | selected \(delegate.selectedSlideRows)")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            delegate.undo.undo(); print("  undo: titles back \(titles() == first)")
+            // A picture of the column: ring on the selection, a hidden slide, the Fade badge, the dot of the slide being presented.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            presentation.slides[2].setHidden(true)
+            delegate.showWindow = NSWindow(); delegate.showIndex = 4
+            delegate.table.reloadData(); delegate.table.selectRowIndexes(IndexSet([0, 1]), byExtendingSelection: false)
+            delegate.window.layoutIfNeeded(); RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".slides.png")) }
+            delegate.showWindow = nil
+            presentation.slides[2].setHidden(false)
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

@@ -89,7 +89,11 @@ final class CanvasView: NSView {
         surface.wantsLayer = true; surface.canvas = self
         addSubview(surface)
         surface.addSubview(overlay)
+        addSubview(edgeShade)
     }
+    /// Over the left edge of the canvas, above the slide. Only the main canvas has it (not thumbnails or the player).
+    let edgeShade = EdgeShade()
+    var showsEdgeShade = false
     required init?(coder: NSCoder) { fatalError() }
     override func draw(_ dirtyRect: NSRect) { NSColor.black.setFill(); bounds.fill() }
     /// Pinch: zoom around the pointer so the point under it stays put.
@@ -120,6 +124,7 @@ final class CanvasView: NSView {
         super.layout()
         guard let presentation else { surface.isHidden = true; return }
         surface.isHidden = false
+        edgeShade.frame = NSRect(x: 0, y: 0, width: 14, height: bounds.height); edgeShade.isHidden = presenting || !showsEdgeShade
         let margin: CGFloat = presenting ? 0 : 28
         let scale = max(0.01, min((bounds.width - margin * 2) / presentation.size.width, (bounds.height - margin * 2) / presentation.size.height))
         let effectiveZoom = presenting ? 1 : zoom

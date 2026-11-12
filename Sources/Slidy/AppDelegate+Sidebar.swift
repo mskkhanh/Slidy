@@ -31,6 +31,13 @@ extension AppDelegate {
         searchField.controlSize = .small
         searchField.sendsSearchStringImmediately = true
         searchField.focusRingType = .none
+        // The slide count, once, at the bottom of the slide list.
+        slideCountLabel.font = .systemFont(ofSize: 10); slideCountLabel.textColor = NSColor(white: 0.5, alpha: 0.9)
+        slideCountLabel.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(slideCountLabel)
+        NSLayoutConstraint.activate([slideCountLabel.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 12), slideCountLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -6)])
+        scroll.automaticallyAdjustsContentInsets = false
+        scroll.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 24, right: 0)
         searchField.target = self; searchField.action = #selector(filterChanged(_:))
         searchField.setAccessibilityLabel("Filter files")
         searchField.translatesAutoresizingMaskIntoConstraints = false
@@ -58,6 +65,7 @@ extension AppDelegate {
         guard clamped != sidebarWidth else { return }
         sidebarWidth = clamped
         sidebarWidthConstraint.constant = clamped
+        if !recentsMode, presentation != nil { table.noteHeightOfRows(withIndexesChanged: IndexSet(integersIn: 0..<table.numberOfRows)) }   // thumbnails follow the width
         if remember { UserDefaults.standard.set(Double(clamped), forKey: "sidebarWidth") }
     }
 
@@ -151,7 +159,7 @@ extension AppDelegate {
     /// The menu for the row that was right-clicked (empty for the slide list, which has no menu).
     func fillSidebarMenu(_ menu: NSMenu, row: Int) {
         menu.removeAllItems()
-        guard recentsMode else { return }
+        guard recentsMode else { fillSlideMenu(menu, row: row); return }
         func item(_ title: String, _ action: Selector, _ represented: Any? = nil) -> NSMenuItem {
             let entry = NSMenuItem(title: title, action: action, keyEquivalent: ""); entry.target = self; entry.representedObject = represented; return entry
         }

@@ -13,7 +13,7 @@ run() {   # run <deck> <slide> <ids> ENV=1 ...
   env "$@" $bin --drive "$work/deck.pptx" $slide ${=ids} 2>&1 | sed -e "s#$work#WORK#g" -e 's#/private##g' -e 's/[0-9A-F]\{8\}-[0-9A-F-]\{27\}/UUID/g' -e 's/in [0-9.]* s/in N s/g'
 }
 for deck in deck1 deck2; do
-  for scenario in WAND GROW BOLD LAYER NEWSLIDE DELETESLIDE MOVESLIDE AUTOLIST PASTE FADEKEY CROP SIDEBAR MODIFIED REACH RESIZE DRAG SNAP CARET RENAME RECENTS; do
+  for scenario in SLIDES GROUPS WAND GROW BOLD LAYER NEWSLIDE DELETESLIDE MOVESLIDE AUTOLIST PASTE FADEKEY CROP SIDEBAR MODIFIED REACH RESIZE DRAG SNAP CARET RENAME RECENTS; do
     run $deck 2 "2 3" $scenario=1
   done
   run $deck 2 "2 3" BADGE=2

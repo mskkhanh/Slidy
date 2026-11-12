@@ -102,6 +102,53 @@ extension Presentation {
         return slide
     }
 
+    /// Copies the slide at `index` right after it: same content, background, layout and animation. Pictures are shared
+    /// with the original; its notes page is not copied (a notes page belongs to one slide).
+    @discardableResult
+    func duplicateSlide(at index: Int) throws -> Slide {
+        guard slides.indices.contains(index), slides.allSatisfy({ $0.listEntry != nil }),
+              (try part("ppt/presentation.xml")).rootElement()?.descendant("sectionLst") == nil else {
+            throw AppError.message("Can’t duplicate a slide in this file (it has sections).")
+        }
+        let source = slides[index]
+        writeTiming(source)   // the copy gets the effects as they are now, not as they were when the file was opened
+        guard let document = source.document.copy() as? XMLDocument else { throw AppError.message("Can’t copy this slide.") }
+        let number = nextSlideNumber()
+        let path = "ppt/slides/slide\(number).xml"
+        let sourceName = (source.path as NSString).lastPathComponent
+        let sourceRels = folder.appendingPathComponent("ppt/slides/_rels/\(sourceName).rels")
+        try FileManager.default.createDirectory(at: folder.appendingPathComponent("ppt/slides/_rels"), withIntermediateDirectories: true)
+        let rels = try readXML(sourceRels)
+        for entry in rels.rootElement()?.elements ?? [] where (entry.attr("Type") ?? "").hasSuffix("/notesSlide") { entry.detach() }
+        try rels.xmlData.write(to: folder.appendingPathComponent("ppt/slides/_rels/slide\(number).xml.rels"), options: .atomic)
+        try document.xmlData.write(to: folder.appendingPathComponent(path), options: .atomic)
+        try editContentTypes { text in
+            text.replacingOccurrences(of: "</Types>", with: "<Override PartName=\"/\(path)\" ContentType=\"application/vnd.openxmlformats-officedocument.presentationml.slide+xml\"/></Types>")
+        }
+        var relationshipID = "rId1"
+        try editRelationships { root in
+            let used = root.elements.compactMap { Int(($0.attr("Id") ?? "").dropFirst(3)) }
+            relationshipID = "rId\((used.max() ?? 0) + 1)"
+            let entry = XMLElement(name: "Relationship")
+            entry.set("Id", relationshipID); entry.set("Type", "\(relationshipNS)/slide"); entry.set("Target", "slides/slide\(number).xml")
+            root.addChild(entry)
+        }
+        guard let list = (try part("ppt/presentation.xml")).rootElement()?.child("sldIdLst"), let anchor = source.listEntry else {
+            throw AppError.message("The slide list is missing in the file.")
+        }
+        let nextID = (list.elements.compactMap { Int($0.attr("id") ?? "") }.max() ?? 255) + 1
+        let entry = fragment("<p:sldId id=\"\(nextID)\" r:id=\"\(relationshipID)\"/>")
+        list.insertChild(entry, at: anchor.index + 1)
+        orderDirty = true
+        let slide = Slide(path: path, document: document)
+        slide.listEntry = entry
+        xmlCache[path] = document
+        try parse(slide)
+        slides.insert(slide, at: index + 1)
+        insertedSlidePaths.insert(path)
+        return slide
+    }
+
     /// Takes back a slide made by `insertSlide` (undo): the list entry, relationship, content type and files all go.
     func removeInsertedSlide(at index: Int) throws {
         guard slides.indices.contains(index), slides.count > 1, insertedSlidePaths.contains(slides[index].path) else {

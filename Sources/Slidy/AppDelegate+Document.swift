@@ -49,7 +49,8 @@ extension AppDelegate {
                     let position = min(max(0, lastIndex), document.slides.count - 1)
                     self.table.deselectAll(nil)
                     self.table.setAccessibilityLabel("Slides")
-                    self.table.rowHeight = 106; self.table.intercellSpacing = NSSize(width: 0, height: 4)
+                    self.table.rowHeight = 60; self.table.intercellSpacing = NSSize(width: 0, height: 0); self.table.allowsMultipleSelection = true
+                    SlideThumb.aspect = document.size.height / max(1, document.size.width)
                     self.showingRecents = false; self.emptyRecents.isHidden = true; self.canvas.resetZoom()
                     self.presentation = document; self.savedURL = nil; self.modified = false; self.index = position
                     self.undo.removeAllActions(); self.thumbnailCache.removeAllObjects()
