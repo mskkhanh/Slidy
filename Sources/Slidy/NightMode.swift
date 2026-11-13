@@ -28,6 +28,11 @@ enum NightMode {
         if let background, let a = color.usingColorSpace(.sRGB), let b = background.usingColorSpace(.sRGB),
            abs(a.redComponent - b.redComponent) + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent) < 0.03 { return surface(background) }
         if let background, let other = brightness(background), other <= 0.6 { return color }   // a light shape on a dark slide keeps its color
+        // A clearly colored fill (a highlighted card) stays a different color: a dark shade of the same hue, so it is still told apart
+        // from the plain cards, which all become the same dark gray.
+        if let rgb = color.usingColorSpace(.sRGB), rgb.saturationComponent > 0.3 {
+            return NSColor(hue: rgb.hueComponent, saturation: min(1, rgb.saturationComponent * 0.85), brightness: 0.38, alpha: rgb.alphaComponent)
+        }
         return raised
     }
     /// A slide that is already black would melt into the black editor: show it a touch lighter (editing only).
