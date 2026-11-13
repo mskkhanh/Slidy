@@ -843,6 +843,43 @@ extension Verification {
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             return
         }
+        if ProcessInfo.processInfo.environment["LISTJOIN"] != nil {   // pulling the next list item up, then pressing Return, must not double the marker
+            let slide = presentation.slides[slideIndex]
+            guard let item = slide.items.first(where: { $0.canMove && $0.hasList && $0.paragraphs.count >= 3 }) else { print("  no list"); return }
+            let n = delegate.window.windowNumber
+            func key(_ code: UInt16, _ chars: String) { delegate.canvas.editor?.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: n, context: nil, characters: chars, charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code)!) }
+            func show(_ label: String) { print("  \(label): \((delegate.canvas.editor?.string ?? "").replacingOccurrences(of: "\n", with: " ⏎ ").replacingOccurrences(of: "\t", with: "→").prefix(160))") }
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            guard let editor = delegate.canvas.editor else { return }
+            let original = editor.string
+            show("start")
+            let lines = original.components(separatedBy: "\n")
+            let secondStart = lines[0].utf16.count + 1
+            let markerLength = InlineTextView.marker(in: lines[1])?.length ?? 0
+            // A: caret right after the second item's marker; Backspace removes the marker, Backspace again joins the lines; Return splits again.
+            editor.setSelectedRange(NSRange(location: secondStart + markerLength, length: 0))
+            key(51, "\u{7f}"); show("A: Backspace on the marker")
+            key(51, "\u{7f}"); show("A: Backspace joins the lines")
+            key(36, "\r"); show("A: Return splits again")
+            // B: only the line break is deleted (Delete at the end of the first line): the marker would be left in the middle.
+            editor.string = original; editor.viewDidMoveToWindow()
+            editor.setSelectedRange(NSRange(location: lines[0].utf16.count, length: 0))
+            key(117, "\u{F728}"); show("B: Delete at the end of line 1")
+            key(36, "\r"); show("B: Return splits again")
+            // C: a marker typed in the middle of a line is left alone (only a join removes strays).
+            editor.string = "1.\tOne\n2.\tTwo"; editor.viewDidMoveToWindow()
+            editor.setSelectedRange(NSRange(location: 6, length: 0)); editor.insertText("x2.\t", replacementRange: NSRange(location: 6, length: 0))
+            show("C: typing a marker mid-line")
+            // D: bullets too.
+            editor.string = "•\tOne\n•\tTwo\n•\tThree"; editor.viewDidMoveToWindow()
+            editor.setSelectedRange(NSRange(location: 5, length: 0)); key(117, "\u{F728}"); show("D: bullets, Delete at the end of line 1")
+            key(36, "\r"); show("D: Return splits again")
+            // E: a normal list edit still works: Return in the middle of an item numbers the next ones.
+            editor.string = "1.\tOne\n2.\tTwo\n3.\tThree"; editor.viewDidMoveToWindow()
+            editor.setSelectedRange(NSRange(location: 6, length: 0)); key(36, "\r"); show("E: Return after \"One\"")
+            delegate.canvas.finishEditing(commit: false)
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

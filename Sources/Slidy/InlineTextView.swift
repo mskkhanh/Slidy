@@ -154,12 +154,48 @@ final class InlineTextView: NSTextView {
         for (range, text) in edits where range.location < selection.location { shift += text.count - range.length }
         setSelectedRange(NSRange(location: max(0, selection.location + shift), length: selection.length))
     }
-    override func didChangeText() { super.didChangeText(); renumber(); onTextChange?() }
+    override func didChangeText() { super.didChangeText(); removeStrayMarkers(); renumber(); onTextChange?() }
+    private var knownLineCount: Int?
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); knownLineCount = lines.count }
+    /// Joining two lines (deleting the line break) can leave the lower line's marker ("2.<tab>" or "•<tab>") in the middle of the
+    /// joined text. A marker belongs to the start of a line only, so such a leftover is dropped (the line break typed next
+    /// then starts a clean item instead of a doubled "2. 2.").
+    private func removeStrayMarkers() {
+        let count = lines.count
+        defer { knownLineCount = count }
+        guard let before = knownLineCount, count < before, !renumbering, let storage = textStorage,
+              let regex = try? NSRegularExpression(pattern: "(?:[0-9]{1,3}\\.|•)\\t") else { return }
+        var strays: [NSRange] = []
+        var location = 0
+        for line in lines {
+            let text = line as NSString
+            let start = Self.marker(in: line)?.length ?? 0
+            if start < text.length {
+                for match in regex.matches(in: line, range: NSRange(location: start, length: text.length - start)) {
+                    strays.append(NSRange(location: location + match.range.location, length: match.range.length))
+                }
+            }
+            location += text.length + 1
+        }
+        guard !strays.isEmpty else { return }
+        renumbering = true; defer { renumbering = false }
+        var caret = selectedRange().location
+        for range in strays.reversed() {
+            storage.replaceCharacters(in: range, with: "")
+            if caret > range.location { caret -= min(range.length, caret - range.location) }
+        }
+        setSelectedRange(NSRange(location: caret, length: 0))
+    }
 
     override func keyDown(with event: NSEvent) {
         let prefix = (string as NSString).substring(with: linePrefixRange)
         let line = (string as NSString).substring(with: currentLineRange).trimmingCharacters(in: .newlines)
         if event.keyCode == 53 { finish?(false) }
+        else if event.keyCode == 51, event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty, selectedRange().length == 0,
+                let marker = Self.marker(in: prefix), prefix.count == marker.length {
+            // Backspace right after a list marker removes the whole marker (the item becomes a plain line), as in any editor.
+            insertText("", replacementRange: linePrefixRange)
+        }
         else if event.keyCode == 36 && event.modifierFlags.contains(.shift) { insertText("\u{2028}", replacementRange: selectedRange()) }
         else if event.keyCode == 36, let marker = Self.marker(in: prefix) {
             if line.count == marker.length && selectedRange().length == 0 {
