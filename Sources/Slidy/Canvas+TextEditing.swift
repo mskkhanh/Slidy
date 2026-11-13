@@ -10,6 +10,7 @@ extension CanvasView {
     func makeEditor(for item: SlideItem) -> InlineTextView {
         let night = nightActive
         // The editor starts `editorPad` above the object: stacked accents (Ế, Ẫ) rise above a tight line box and would be cut off.
+        InlineTextView.linkColor = presentation?.colors["hlink"] ?? NSColor(srgbRed: 0.05, green: 0.4, blue: 0.85, alpha: 1)
         let view = InlineTextView(frame: CGRect(x: item.frame.minX, y: item.frame.minY - Self.editorPad, width: item.frame.width, height: item.frame.height + Self.editorPad))
         view.isRichText = true; view.importsGraphics = false; view.usesFontPanel = false; view.usesRuler = false
         view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
@@ -24,6 +25,12 @@ extension CanvasView {
         for (index, paragraph) in item.paragraphs.enumerated() {
             let text = night ? NightMode.text(paragraph.text) : paragraph.text
             var attributes: [NSAttributedString.Key: Any] = text.length > 0 ? text.attributes(at: 0, effectiveRange: nil) : [.font: fallbackFont, .foregroundColor: fallbackColor]
+            // The first character may be linked; the list marker and the typing style must not inherit the link.
+            if attributes[.link] != nil {
+                attributes[.link] = nil; attributes[.underlineStyle] = nil
+                if let base = attributes[.slidyBaseColor] { attributes[.foregroundColor] = base }
+                attributes[.slidyBaseColor] = nil
+            }
             let style = NSMutableParagraphStyle()
             style.alignment = paragraph.alignment
             style.minimumLineHeight = paragraph.spacing; style.maximumLineHeight = paragraph.spacing
@@ -171,10 +178,11 @@ extension CanvasView {
             let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
             let bullets = editor.bulletRows, numbered = editor.numberedRows
             let text = editor.plainText
-            if text != item.text || bullets != existingBullets || numbered != existingNumbered || editor.boldEdited {
+            if text != item.text || bullets != existingBullets || numbered != existingNumbered || editor.boldEdited || editor.linkEdited {
                 onWillEdit?()
                 presentation?.updateText(item, text: text, bulletRows: bullets, numberedRows: numbered)
                 if editor.boldEdited { presentation?.applyBold(item, flags: editor.boldFlags) }
+                if editor.linkEdited { presentation?.applyLinks(item, addresses: editor.linkAddresses) }
                 if !existingBullets.isEmpty || !bullets.isEmpty { slide?.timingDirty = true }
                 onChanged?()
             }

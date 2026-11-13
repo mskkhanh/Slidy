@@ -30,12 +30,12 @@ extension Presentation {
         for (index, line) in lines.enumerated() {
             let original = index < old.count ? old[index] : template
             let p = (original?.copy() as? XMLElement) ?? fragment("<a:p><a:pPr/><a:r><a:rPr sz=\"2400\"/><a:t/></a:r></a:p>")
-            let originalText = p.elements.filter { $0.localName == "r" || $0.localName == "br" }.map { $0.localName == "br" ? "\u{2028}" : ($0.child("t")?.stringValue ?? "") }.joined()
+            let originalText = p.elements.filter { $0.localName == "r" || $0.localName == "br" }.map { $0.localName == "br" ? "\u{2028}" : ($0.child("t")?.textContent ?? "") }.joined()
             if line != originalText {
                 // Preserve styles on the unchanged prefix/suffix, including mixed runs.
                 let attributed = NSMutableAttributedString(string: "")
                 for run in p.elements where run.localName == "r" || run.localName == "br" {
-                    let value = run.localName == "br" ? "\u{2028}" : (run.child("t")?.stringValue ?? "")
+                    let value = run.localName == "br" ? "\u{2028}" : (run.child("t")?.textContent ?? "")
                     let style = run.child("rPr")?.xmlString ?? "<a:rPr sz=\"2400\"/>"
                     attributed.append(NSAttributedString(string: value, attributes: [NSAttributedString.Key("xmlStyle"): style]))
                 }
@@ -114,7 +114,7 @@ extension Presentation {
         for (index, paragraph) in body.all("p").enumerated() where index < flags.count {
             let line = flags[index]
             let runs = paragraph.elements.filter { ["r", "br", "fld"].contains($0.localName ?? "") }
-            let lengths = runs.map { $0.localName == "br" ? 1 : (($0.child("t")?.stringValue ?? "") as NSString).length }
+            let lengths = runs.map { $0.localName == "br" ? 1 : (($0.child("t")?.textContent ?? "") as NSString).length }
             guard lengths.reduce(0, +) == line.count else { continue }
             var offset = 0
             for (run, length) in zip(runs, lengths) {
@@ -126,7 +126,7 @@ extension Presentation {
                     properties.set("b", bold ? "1" : "0")
                 }
                 if run.localName != "r" || part.allSatisfy({ $0 == part[0] }) { mark(run, part[0]); continue }
-                let text = (run.child("t")?.stringValue ?? "") as NSString
+                let text = (run.child("t")?.textContent ?? "") as NSString
                 var position = run.index, start = 0
                 run.detach()
                 while start < length {

@@ -90,10 +90,15 @@ final class CanvasView: NSView {
         addSubview(surface)
         surface.addSubview(overlay)
         addSubview(edgeShade)
+        configureLinkChip()
     }
     /// Over the left edge of the canvas, above the slide. Only the main canvas has it (not thumbnails or the player).
     let edgeShade = EdgeShade()
     var showsEdgeShade = false
+    let linkChip = LinkChip()
+    var linkTracking: NSTrackingArea?
+    var linkHideTimer: Timer?
+    var pendingLinkOpen: DispatchWorkItem?
     required init?(coder: NSCoder) { fatalError() }
     override func draw(_ dirtyRect: NSRect) { NSColor.black.setFill(); bounds.fill() }
     /// Pinch: zoom around the pointer so the point under it stays put.
@@ -143,6 +148,7 @@ final class CanvasView: NSView {
     func display(_ slide: Slide, in presentation: Presentation, presenting: Bool = false) {
         finishEditing(commit: true)
         endMarquee()
+        hideLinkChip()
         self.presentation = presentation; self.slide = slide; self.presenting = presenting
         selected = nil
         rebuild(); needsLayout = true; needsDisplay = true

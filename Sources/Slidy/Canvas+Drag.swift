@@ -34,7 +34,7 @@ extension CanvasView {
         return true
     }
     func backgroundClick(_ event: NSEvent) {
-        if presenting { advance(); return }
+        if presenting { if !openLinkWhilePresenting(event) { advance() }; return }
         if cropItem != nil { cropMouseDown(event); return }
         if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
@@ -60,7 +60,8 @@ extension CanvasView {
         overlay.marquee = nil; overlay.needsDisplay = true
     }
     func objectMouseDown(_ view: ObjectView, event: NSEvent) {
-        if presenting { advance(); return }
+        if presenting { if !openLinkWhilePresenting(event) { advance() }; return }
+        pendingLinkOpen?.cancel()   // a second click (double-click) edits the text instead of opening the link
         if cropItem != nil { cropMouseDown(event); return }
         if beginResizeIfOnHandle(event) { return }
         finishEditing(commit: true)
@@ -225,7 +226,11 @@ extension CanvasView {
         overlay.guides = guideLines(for: frame, targets: targets)
         return frame
     }
-    func objectMouseUp(_ view: ObjectView, event: NSEvent) { finishDrag() }
+    func objectMouseUp(_ view: ObjectView, event: NSEvent) {
+        let dragged = editedDrag
+        finishDrag()
+        if !dragged, editor == nil, !presenting { _ = openLinkAfterClick(event) }   // a click without a drag on a link
+    }
     func finishDrag() {
         if cropItem != nil { cropDrag = nil; return }
         overlay.guides = []; overlay.needsDisplay = true

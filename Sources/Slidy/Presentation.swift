@@ -39,6 +39,8 @@ final class Presentation {
     var minorFont = "Helvetica Neue"
     var missingFonts = Set<String>()
     var xmlCache: [String: XMLDocument] = [:]
+    /// External hyperlink addresses of each slide document (rId -> address), kept for the lifetime of that document.
+    var linkTargets: [ObjectIdentifier: [String: String]] = [:]
     let imageCache = NSCache<NSString, NSImage>()
     init(url: URL) throws {
         source = url
@@ -141,6 +143,7 @@ final class Presentation {
     func parse(_ slide: Slide) throws {
         guard let root = slide.document.rootElement(), let tree = root.child("cSld")?.child("spTree") else { throw AppError.message("Invalid slide structure.") }
         slide.items = []; slide.warnings = []
+        linkTargets[ObjectIdentifier(slide.document)] = hyperlinkTargets(slide.path)
         let layout = related(slide.path, type: "slideLayouts")
         let master = layout.flatMap { related($0, type: "slideMasters") }
         let parents = [layout, master].compactMap { $0 }.compactMap { try? part($0).rootElement() }
@@ -242,6 +245,7 @@ final class Presentation {
         item.anchor = props?.attr("anchor") ?? "t"
         item.autoFit = props?.child("spAutoFit") != nil
         var autoNumber = 0
+        let targets = item.node.rootDocument.flatMap { linkTargets[ObjectIdentifier($0)] } ?? [:]
         item.paragraphs = body.all("p").enumerated().map { index, p in
             let level = Int(p.child("pPr")?.number("lvl") ?? 0) + 1
             let defaults = body.child("lstStyle")?.child("lvl\(level)pPr") ?? inherited?.child("txBody")?.child("lstStyle")?.child("lvl\(level)pPr")
@@ -250,7 +254,9 @@ final class Presentation {
             let text = NSMutableAttributedString(string: "")
             for run in p.elements {
                 if run.localName == "r" || run.localName == "fld" {
-                    text.append(NSAttributedString(string: run.child("t")?.stringValue ?? "", attributes: attributes(run.child("rPr"), fallback: pr)))
+                    var style = attributes(run.child("rPr"), fallback: pr)
+                    if let id = run.child("rPr")?.child("hlinkClick")?.attr("r:id"), let address = targets[id], let url = URL(string: address) { style = linkAttributes(style, url: url) }
+                    text.append(NSAttributedString(string: run.child("t")?.textContent ?? "", attributes: style))
                 } else if run.localName == "br" { text.append(NSAttributedString(string: "\u{2028}", attributes: attributes(run.child("rPr"), fallback: pr))) }
             }
             let bulletProps = pp?.child("buNone") != nil ? nil : (pp?.child("buChar") ?? pp?.child("buAutoNum") ?? defaults?.child("buChar"))

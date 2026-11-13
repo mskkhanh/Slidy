@@ -30,8 +30,21 @@ extension XMLElement {
         let result = XMLElement(name: name); addChild(result); return result
     }
 }
+extension XMLElement {
+    /// The text of a text element, including a text that is only spaces (Foundation reports that as ""; a run of just " "
+    /// between two styled words would otherwise lose its space).
+    var textContent: String {
+        let value = stringValue ?? ""
+        if !value.isEmpty { return value }
+        let dump = xmlString
+        guard let open = dump.firstIndex(of: ">"), let close = dump.lastIndex(of: "<"), open < close, !dump.hasPrefix("<" + (name ?? "") + "/>"), !dump[..<open].hasSuffix("/") else { return "" }
+        let inner = String(dump[dump.index(after: open)..<close])
+        guard !inner.contains("<") else { return "" }
+        return inner.replacingOccurrences(of: "&lt;", with: "<").replacingOccurrences(of: "&gt;", with: ">").replacingOccurrences(of: "&quot;", with: "\"").replacingOccurrences(of: "&apos;", with: "'").replacingOccurrences(of: "&amp;", with: "&")
+    }
+}
 func xml(_ text: String) throws -> XMLDocument {
-    let doc = try XMLDocument(xmlString: text, options: [.nodePreserveAll, .nodeLoadExternalEntitiesNever])
+    let doc = try XMLDocument(xmlString: text, options: [.nodePreserveAll, .nodePreserveWhitespace, .nodeLoadExternalEntitiesNever])
     guard doc.dtd == nil else { throw AppError.message("XML with a DTD is not supported.") }
     return doc
 }

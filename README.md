@@ -16,6 +16,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Pinch to zoom around the pointer (⌘0 fits the slide); moving or resizing objects shows alignment guides that snap to other objects and the slide edges/centre (hold ⌘ to move freely).
 - Press Delete (⌫) in the slide list to delete the selected slide (notes and unused media go too; ⌘Z restores everything).
 - ⌘1 (or ⌘E) shows the recent files, ⌘2 the slides of the current file; the matching buttons sit at the top left of the sidebar, the hide / show button at its top right.
+- Links: select text while editing and press ⌘K (or Insert > Link…) to attach a web address; it is saved as a standard PowerPoint hyperlink. Hover a link to get a small chip with a Copy button; click it to open it in your default browser (⌘-click while editing). While presenting a click on a link opens it too.
 - With the sidebar hidden (⌘S), "3/15" (this slide of all) sits at the bottom left.
 - The slide list: a modest centered thumbnail with a thin border and the slide number beside it (the total sits at the bottom). The selected slides get a blue ring, the pointer a faint one; a sparkle badge marks slides with Fade effects, a crossed eye hidden ones, a blue dot the slide being presented. ⇧-click or ⌘-click selects several slides; drag them together (a line shows where they land); Delete removes them (⌘Z brings them back); right-click: Duplicate, Hide / Show, Delete. A hidden slide stays in the file (`show="0"`) and is skipped while presenting.
 - The recent files list (⌘1 or ⌘E): one line per file with the full name in the tooltip, a quiet dot, the modified date on the right (a ✕ replaces it while the pointer is over the row), a thin blue bar on the open file. Drag its right edge to make the column wider or narrower (remembered). ⌘K filters by name. Right-click a file: Open, Rename, Pin to Top, Move to Heading, Show in Finder, Remove from List. ↑ ↓ choose a row, Return opens it.
@@ -72,6 +73,7 @@ Sources/Slidy/
   Canvas+TextEditing.swift       the inline editor and its caret
   Canvas+Crop.swift              crop mode for pictures
   Canvas+OrderBadges.swift       the Fade order numbers
+  Canvas+Links.swift             hover chip and click on links
   ObjectViews.swift              one object's view and the slide surface
   InlineTextView.swift           the text editor view (lists, bold, whole accents)
   Overlays.swift                 selection overlay, order numbers, crop handles, slide counter
@@ -82,6 +84,8 @@ Sources/Slidy/
   Presentation+TextFit.swift     text box size: grow, auto-fit, trim
   Presentation+TableText.swift   cell text split into text boxes
   Presentation+Insert.swift      new text boxes and pictures
+  Presentation+Links.swift       hyperlinks in text (hlinkClick and its relationship)
+  AppDelegate+Links.swift        the Link… dialog and ⌘K
   Presentation+Saving.swift      Fade timing and saving
   SlideInsert.swift              adding, removing and reordering slides in the package
   ObjectClipboard.swift          copy / paste of objects

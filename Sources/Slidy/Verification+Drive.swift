@@ -679,6 +679,66 @@ extension Verification {
             presentation.slides[2].setHidden(false)
             return
         }
+        if ProcessInfo.processInfo.environment["LINKS"] != nil {   // a link on part of a text: written like PowerPoint does, shown, copied, opened
+            let slide = presentation.slides[slideIndex]
+            let url = URL(fileURLWithPath: arguments[0])
+            for (text, expected) in [("plancub.com", "https://plancub.com"), ("a@b.com", "mailto:a@b.com"), (" https://plancub.com/x?y=1 ", "https://plancub.com/x?y=1"), ("foo bar", "-"), ("ftp://x.com", "-"), ("http://", "-"), ("localhost", "-"), ("", "-")] {
+                print("  address \"\(text)\" -> \(AppDelegate.linkURL(from: text)?.absoluteString ?? "-") (expected \(expected))")
+            }
+            guard let item = slide.items.first(where: { $0.canMove && !$0.hasList && $0.text.count > 14 && !$0.text.contains("\n") }) else { print("  no text to link"); return }
+            let before = item.text
+            func runs(_ i: SlideItem) -> String { (i.textBody?.all("p").first?.all("r") ?? []).map { "[\($0.child("t")?.stringValue ?? "")|\($0.child("rPr")?.child("hlinkClick") != nil ? "LINK" : "-")|b=\($0.child("rPr")?.attr("b") ?? "-")]" }.joined() }
+            print("  before: \(runs(item))")
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            guard let editor = delegate.canvas.editor else { return }
+            let range = NSRange(location: 3, length: 6)
+            editor.setSelectedRange(range)
+            delegate.applyLink(URL(string: "https://example.invalid/plancub")!, to: editor, range: range)
+            print("  linked in the editor: \(editor.linkAddress(at: 4) ?? "nil"), outside \(editor.linkAddress(at: 1) ?? "nil"), underlined \((editor.textStorage?.attribute(.underlineStyle, at: 4, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue)")
+            delegate.canvas.finishEditing(commit: true)
+            print("  after: \(runs(item)); text unchanged \(item.text == before)")
+            let rel = (try? String(contentsOf: presentation.folder.appendingPathComponent("ppt/slides/_rels/" + (slide.path as NSString).lastPathComponent + ".rels"), encoding: .utf8)) ?? ""
+            print("  relationship: \(rel.contains("TargetMode=\"External\"") && rel.contains("example.invalid/plancub") && rel.contains("/hyperlink"))")
+            // Same address again reuses the relationship; the file stays valid after saving and reopening.
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            delegate.canvas.editor.map { e in let r = NSRange(location: 0, length: 2); e.setSelectedRange(r); delegate.applyLink(URL(string: "https://example.invalid/plancub")!, to: e, range: r) }
+            delegate.canvas.finishEditing(commit: true)
+            let rel2 = (try? String(contentsOf: presentation.folder.appendingPathComponent("ppt/slides/_rels/" + (slide.path as NSString).lastPathComponent + ".rels"), encoding: .utf8)) ?? ""
+            print("  one relationship for both: \(rel2.components(separatedBy: "example.invalid/plancub").count - 1)")
+            delegate.flushSave()
+            let again = try? Presentation(url: url)
+            let savedItem = again?.slides[slideIndex].items.first { $0.id == item.id }
+            let linkedText = savedItem?.paragraphs.first.map { p -> String in var out = ""; p.text.enumerateAttribute(.link, in: NSRange(location: 0, length: p.text.length)) { v, r, _ in if v != nil { out += "«" + (p.text.string as NSString).substring(with: r) + "»" } }; return out } ?? ""
+            print("  saved and reopened: linked text \(linkedText), text unchanged \(savedItem?.text == before)")
+            // Hover shows the chip, Copy puts the address on the clipboard, leaving hides it. A click schedules the opening (not run here).
+            delegate.canvas.display(slide, in: presentation); delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            guard let found = delegate.canvas.linkAt(CGPoint(x: item.frame.minX + 40, y: item.frame.minY + 8)) ?? slide.items.compactMap({ i in delegate.canvas.linkAt(CGPoint(x: i.frame.midX, y: i.frame.midY)) }).first else { print("  no link found on the slide"); return }
+            print("  link under the pointer: \(found.url.absoluteString), rect \(found.rect.integral)")
+            let at = delegate.canvas.surface.convert(CGPoint(x: found.rect.midX, y: found.rect.midY), to: nil)
+            let move = NSEvent.mouseEvent(with: .mouseMoved, location: at, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 1, clickCount: 0, pressure: 0)!
+            delegate.canvas.mouseMoved(with: move)
+            let chip = delegate.canvas.linkChip
+            print("  hover: chip shown \(!chip.isHidden), address \(chip.address), above the link \(chip.frame.maxY <= delegate.canvas.surface.convert(found.rect, to: delegate.canvas).minY + 1)")
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".link.png")) }
+            chip.copyAddress()
+            print("  copied: \(NSPasteboard.general.string(forType: .string) ?? "")")
+            let away = NSEvent.mouseEvent(with: .mouseMoved, location: delegate.canvas.surface.convert(CGPoint(x: 2, y: 2), to: nil), modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 2, clickCount: 0, pressure: 0)!
+            delegate.canvas.mouseMoved(with: away)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.7))
+            print("  pointer away: chip hidden \(chip.isHidden)")
+            let click = NSEvent.mouseEvent(with: .leftMouseUp, location: at, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 3, clickCount: 1, pressure: 0)!
+            print("  click on the link schedules opening: \(delegate.canvas.openLinkAfterClick(click)); a ⇧-click does not: \(!delegate.canvas.openLinkAfterClick(NSEvent.mouseEvent(with: .leftMouseUp, location: at, modifierFlags: [.shift], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 4, clickCount: 1, pressure: 0)!))")
+            delegate.canvas.pendingLinkOpen?.cancel(); delegate.canvas.pendingLinkOpen = nil   // never open a browser from a test
+            // Remove the link: the text keeps its colors.
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            if let e = delegate.canvas.editor { let r = NSRange(location: 0, length: 9); e.setSelectedRange(r); delegate.applyLink(nil, to: e, range: r) }
+            delegate.canvas.finishEditing(commit: true)
+            print("  link removed: \(runs(item)); no links left \(item.paragraphs.allSatisfy { p in var any = false; p.text.enumerateAttribute(.link, in: NSRange(location: 0, length: p.text.length)) { v, _, _ in if v != nil { any = true } }; return !any })")
+            for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
+            print("  after undo: \(runs(presentation.slides[slideIndex].items.first { $0.id == item.id } ?? item))")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

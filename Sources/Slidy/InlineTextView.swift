@@ -32,14 +32,56 @@ final class InlineTextView: NSTextView {
         guard let storage = textStorage, index < storage.length else { return false }
         return (storage.attribute(Self.boldKey, at: index, effectiveRange: nil) as? Bool) ?? Self.isBold(storage.attribute(.font, at: index, effectiveRange: nil) as? NSFont)
     }
-    /// Bold on / off for every character of every line, list markers left out (same lines as `plainText`).
-    var boldFlags: [[Bool]] {
+    /// A value for every character of every line, list markers left out (same lines as `plainText`).
+    private func perCharacter<T>(_ value: (Int) -> T) -> [[T]] {
         var location = 0
         return lines.map { line in
             let length = (line as NSString).length, skip = Self.marker(in: line)?.length ?? 0
             defer { location += length + 1 }
-            return (skip..<length).map { bold(at: location + $0) }
+            return (skip..<length).map { value(location + $0) }
         }
+    }
+    /// Bold on / off for every character of every line.
+    var boldFlags: [[Bool]] { perCharacter { bold(at: $0) } }
+
+    // MARK: Links
+    /// Set once a link was added or removed, so the links are written back when editing ends.
+    private(set) var linkEdited = false
+    /// The address linked to the character at `index`, if any.
+    func linkAddress(at index: Int) -> String? {
+        guard let storage = textStorage, index >= 0, index < storage.length else { return nil }
+        return (storage.attribute(.link, at: index, effectiveRange: nil) as? URL)?.absoluteString
+    }
+    /// Links `range` to `url` (or removes the link when `url` is nil). The text keeps its other formatting.
+    func setLink(_ url: URL?, in range: NSRange) {
+        guard range.length > 0, let storage = textStorage, NSMaxRange(range) <= storage.length else { return }
+        storage.beginEditing()
+        storage.enumerateAttributes(in: range) { attributes, part, _ in
+            if let url {
+                if attributes[.slidyBaseColor] == nil { storage.addAttribute(.slidyBaseColor, value: attributes[.foregroundColor] ?? NSColor.labelColor, range: part) }
+                storage.addAttribute(.link, value: url, range: part)
+                storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: part)
+                storage.addAttribute(.foregroundColor, value: Self.linkColor, range: part)
+            } else if attributes[.link] != nil {
+                storage.removeAttribute(.link, range: part)
+                storage.removeAttribute(.underlineStyle, range: part)
+                if let base = attributes[.slidyBaseColor] as? NSColor { storage.addAttribute(.foregroundColor, value: base, range: part) }
+                storage.removeAttribute(.slidyBaseColor, range: part)
+            }
+        }
+        storage.endEditing()
+        linkEdited = true
+        needsDisplay = true; onTextChange?()
+    }
+    static var linkColor = NSColor(srgbRed: 0.05, green: 0.4, blue: 0.85, alpha: 1)
+    /// The address of every character of every line (nil where there is no link).
+    var linkAddresses: [[String?]] { perCharacter { linkAddress(at: $0) } }
+    /// ⌘-click on a link opens it (a plain click places the caret, as in any editor).
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), let address = linkAddress(at: characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))), let url = URL(string: address) {
+            NSWorkspace.shared.open(url); return
+        }
+        super.mouseDown(with: event)
     }
     /// Slidy draws the text itself: NSTextView cuts glyphs at the top of a tight line box, which removed
     /// stacked Vietnamese accents (Ế, Ẫ) in headings. The layout manager draws them whole.

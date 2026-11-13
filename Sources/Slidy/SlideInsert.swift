@@ -95,6 +95,7 @@ extension Presentation {
         // Heading and body hug their text and grow with it.
         if let heading = slide.items.first(where: { $0.id == reference.heading.id }) { updateText(heading, text: "Heading"); enableAutoFit(heading) }
         if let body = slide.items.first(where: { $0.id == reference.body.id }) { updateText(body, text: "Text"); if body.hasList { standardizeListSpacing(body) }; enableAutoFit(body) }
+        slide.document.rootElement()?.descendants("hlinkClick").forEach { $0.detach() }   // the new slide's rels have no hyperlinks
         // A new slide starts without any animation.
         slide.items.filter(\.hasFade).forEach { slide.removeFade(from: $0) }
         slides.insert(slide, at: index + 1)
