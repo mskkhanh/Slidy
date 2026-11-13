@@ -283,6 +283,7 @@ extension Verification {
             }
             // Trim: text stays where it is (same picture of every slide), boxes shrink, a second run changes nothing.
             func shot() -> NSBitmapImageRep? { slidePicture(delegate.canvas) }
+            for slide in presentation.slides { slide.items.forEach { _ = presentation.addSentencePeriods($0) } }   // the periods change pixels on purpose; the fit must not
             var pictures: [NSBitmapImageRep?] = []
             for slide in presentation.slides { delegate.canvas.display(slide, in: presentation); pictures.append(shot()) }
             let widths: [CGFloat] = presentation.slides.map { $0.items.filter(\.canMove).map(\.frame.width).reduce(0, +) }
@@ -295,7 +296,7 @@ extension Verification {
             let widthsAfter: [CGFloat] = presentation.slides.map { $0.items.filter(\.canMove).map(\.frame.width).reduce(0, +) }
             var narrower = 0
             for (a, b) in zip(widths, widthsAfter) where a - b > 1 { narrower += 1 }
-            print("  trim: \(first.trimmed) text boxes on \(first.trimmedSlides) slides; slides with narrower boxes \(narrower); biggest change in any slide picture: \(worst) pixels (slide \(worstSlide))")
+            print("  periods: \(first.periods) lines on \(first.periodSlides) slides; trim: \(first.trimmed) text boxes on \(first.trimmedSlides) slides; slides with narrower boxes \(narrower); biggest change in any slide picture: \(worst) pixels (slide \(worstSlide))")
             if let probe { print("  probe after:  \(need(probe))") }
             // Every text box must still contain all of its text after the wand (the text may not hang out of the frame).
             var hanging: [String] = []
@@ -310,7 +311,7 @@ extension Verification {
             print("  text outside its frame after the wand: \(hanging.count) \(hanging.prefix(4))")
             print("  report: \(AppDelegate.tidyReport(first).replacingOccurrences(of: "\n", with: " | "))")
             let second = delegate.tidyDeck(presentation)
-            print("  second run: \(second.trimmed) trimmed, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")
+            print("  second run: \(second.trimmed) trimmed, \(second.periods) periods, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")
             let nightBefore = NightMode.isOn; defer { NightMode.isOn = nightBefore }
             if ProcessInfo.processInfo.environment["NIGHT"] != nil { NightMode.isOn = true }
             delegate.canvas.display(presentation.slides[slideIndex], in: presentation); delegate.canvas.showsOrderBadges = true; delegate.canvas.updateOrderBadges(); delegate.canvas.displayIfNeeded()
@@ -895,6 +896,30 @@ extension Verification {
             // With the recent files list showing, the slide still follows.
             delegate.presentSlides(); delegate.navigateShow(1); delegate.showingRecents = true; delegate.endShow(); delegate.showingRecents = false
             print("  ended while the recent files list is open: editing slide \(delegate.index + 1), canvas shows \(presentation.slides.firstIndex { $0 === delegate.canvas.slide }.map { $0 + 1 } ?? 0)")
+            return
+        }
+        if ProcessInfo.processInfo.environment["PERIODS"] != nil {   // the wand ends sentences with a period
+            for (text, expected) in [("Mỗi buổi khoảng 75 phút, vào 20h00 tối", true), ("Làm cùng trên PlanCub.", false), ("Chia việc vào 4 vùng", true), ("KHÓA CHUYÊN SÂU 6 BUỔI", false), ("Làm ngay", false), ("Bỏ bớt", false), ("Đổ việc ra", false), ("Chọn 3 việc", false), ("Kế hoạch ngày mai", true), ("Quan trọng · Khẩn cấp", false), ("Bạn còn vướng chỗ nào?", false), ("Gõ câu hỏi vào chat:", false), ("Ebook “5 phút đầu ngày”", false), ("plancub.com và drive.google.com", false), ("Mở plancub.com và drive.google.com", true), ("Mở tài khoản trên https://plancub.com", false), ("1", false), ("30%", false), ("Tối đa 30 học viên", true), ("Thử nghiệm (thêm 5 việc)", true), ("Giảm 30%", false), ("Tăng 30% mỗi tuần", true)] {
+                let got = Presentation.needsPeriod(text)
+                print("  \(got == expected ? "ok " : "BAD") \"\(text)\" -> \(got ? "gets a period" : "left alone")")
+            }
+            let before: [String] = presentation.slides.flatMap { $0.items.filter { $0.canMove && !$0.isTableCell }.flatMap { $0.paragraphs.map { $0.text.string } } }
+            var untouchedFormats = 0
+            let formats: [String] = presentation.slides.flatMap { $0.items.filter { $0.textBody != nil }.flatMap { $0.textBody!.all("p").flatMap { $0.all("r").map { $0.child("rPr")?.xmlString ?? "" } } } }
+            let result = delegate.tidyDeck(presentation)
+            let after: [String] = presentation.slides.flatMap { $0.items.filter { $0.canMove && !$0.isTableCell }.flatMap { $0.paragraphs.map { $0.text.string } } }
+            let formatsAfter: [String] = presentation.slides.flatMap { $0.items.filter { $0.textBody != nil }.flatMap { $0.textBody!.all("p").flatMap { $0.all("r").map { $0.child("rPr")?.xmlString ?? "" } } } }
+            let changed = zip(before, after).filter { $0.0 != $0.1 }
+            print("  wand added a period to \(result.periods) lines on \(result.periodSlides) slides; lines compared \(changed.count)")
+            print("  only a period was added everywhere: \(changed.allSatisfy { $0.1 == $0.0.trimmingCharacters(in: .whitespaces) + "." || $0.1 == $0.0 + "." })")
+            untouchedFormats = zip(formats, formatsAfter).filter { $0.0 == $0.1 }.count
+            print("  run formatting unchanged: \(untouchedFormats == formats.count) (\(formats.count) runs)")
+            for (was, now) in changed.prefix(60) { print("    \(was)  →  …\(now.suffix(6))") }
+            let skipped = zip(before, after).filter { $0.0 == $0.1 && !$0.0.isEmpty && !".!?…:;,)\"”".contains($0.0.last!) && $0.0.split(separator: " ").count >= 4 }
+            print("  left alone although they have 4+ words and no closing mark: \(skipped.count)")
+            for (was, _) in skipped.prefix(20) { print("    \(was)") }
+            let again = delegate.tidyDeck(presentation)
+            print("  second run adds \(again.periods) periods")
             return
         }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it

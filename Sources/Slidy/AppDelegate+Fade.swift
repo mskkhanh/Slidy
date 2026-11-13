@@ -72,10 +72,10 @@ extension AppDelegate {
         let alert = NSAlert()
         // Look first, so a click that changes nothing leaves no undo step behind.
         let needed = !slidesWithoutEffects(in: presentation).isEmpty
-            || presentation.slides.contains { slide in slide.items.contains { presentation.trimTextBox($0, dryRun: true) } }
+            || presentation.slides.contains { slide in slide.items.contains { presentation.periodsToAdd(in: $0) > 0 || presentation.trimTextBox($0, dryRun: true) } }
         guard needed else {
             alert.messageText = "Nothing to change"
-            alert.informativeText = "Every slide already has effects and every text box already fits its text."
+            alert.informativeText = "Every slide already has effects, every sentence ends with a period and every text box fits its text."
             alert.addButton(withTitle: "OK"); alert.runModal(); return
         }
         checkpointAll()
@@ -86,21 +86,31 @@ extension AppDelegate {
         alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "Undo")
         if alert.runModal() == .alertSecondButtonReturn { undo.undo() }
     }
-    /// The work behind the wand button. Returns what changed.
-    func tidyDeck(_ presentation: Presentation) -> (faded: Int, trimmed: Int, trimmedSlides: Int) {
-        var trimmed = 0, trimmedSlides = 0
+    /// What the wand changed.
+    struct TidyResult {
+        var faded = 0, trimmed = 0, trimmedSlides = 0, periods = 0, periodSlides = 0
+    }
+    /// The work behind the wand button: periods at the end of sentences, boxes fitted to their text, Fade on slides without effects.
+    func tidyDeck(_ presentation: Presentation) -> TidyResult {
+        var result = TidyResult()
+        for slide in presentation.slides {
+            let added = slide.items.reduce(0) { $0 + presentation.addSentencePeriods($1) }
+            if added > 0 { result.periods += added; result.periodSlides += 1 }
+        }
         for slide in presentation.slides {
             let count = slide.items.filter { presentation.trimTextBox($0) }.count
-            if count > 0 { trimmed += count; trimmedSlides += 1 }
+            if count > 0 { result.trimmed += count; result.trimmedSlides += 1 }
         }
         let plain = slidesWithoutEffects(in: presentation)
         applyFade(toTopToBottom: plain)
-        return (plain.count, trimmed, trimmedSlides)
+        result.faded = plain.count
+        return result
     }
-    static func tidyReport(_ result: (faded: Int, trimmed: Int, trimmedSlides: Int)) -> String {
+    static func tidyReport(_ result: TidyResult) -> String {
         func count(_ number: Int, _ noun: String) -> String { "\(number) \(noun)\(number == 1 ? "" : (noun.hasSuffix("x") ? "es" : "s"))" }
         var lines: [String] = []
         lines.append(result.faded > 0 ? "Fade added to \(count(result.faded, "slide"))." : "Fade: no slide without effects.")
+        lines.append(result.periods > 0 ? "Period added to \(count(result.periods, "line")) on \(count(result.periodSlides, "slide"))." : "Periods: every sentence already ends with one.")
         lines.append(result.trimmed > 0 ? "\(count(result.trimmed, "text box")) fitted to their text on \(count(result.trimmedSlides, "slide"))." : "Text boxes: all already fit.")
         lines.append("⌘Z undoes it.")
         return lines.joined(separator: "\n")
