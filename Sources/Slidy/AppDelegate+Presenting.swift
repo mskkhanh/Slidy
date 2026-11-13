@@ -42,6 +42,12 @@ extension AppDelegate {
         let last = showIndex
         showWindow?.close(); showWindow = nil; showCanvas = nil; showNumber = nil; window.makeKeyAndOrderFront(nil)
         refreshPresentingDot(old: last)
+        // The editor continues on the slide the presentation ended on (not the one it started from).
+        if let presentation, presentation.slides.indices.contains(last), last != index {
+            index = last
+            if recentsMode { canvas.display(presentation.slides[last], in: presentation); updateStatus() }
+            else { table.selectRowIndexes(IndexSet(integer: last), byExtendingSelection: false); table.scrollRowToVisible(last) }   // shows the slide too
+        }
     }
     /// The small dot beside the slide that is on screen while presenting.
     func refreshPresentingDot(old: Int?) {

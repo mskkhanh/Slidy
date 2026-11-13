@@ -880,6 +880,23 @@ extension Verification {
             delegate.canvas.finishEditing(commit: false)
             return
         }
+        if ProcessInfo.processInfo.environment["SHOWEND"] != nil {   // present from slide 2, move on to slide 5, Esc: the editor is on slide 5
+            delegate.table.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+            print("  editing slide \(delegate.index + 1)")
+            delegate.presentSlides()
+            print("  presenting from slide \(delegate.showIndex + 1)")
+            for _ in 0..<3 { delegate.navigateShow(1) }
+            print("  moved on to slide \(delegate.showIndex + 1)")
+            delegate.endShow()
+            print("  after Esc: editing slide \(delegate.index + 1), list selects \(delegate.table.selectedRow + 1), canvas shows \(presentation.slides.firstIndex { $0 === delegate.canvas.slide }.map { $0 + 1 } ?? 0), presentation window closed \(delegate.showWindow == nil)")
+            // Presenting and ending on the same slide changes nothing.
+            delegate.presentSlides(); delegate.endShow()
+            print("  present and Esc at once: still slide \(delegate.index + 1)")
+            // With the recent files list showing, the slide still follows.
+            delegate.presentSlides(); delegate.navigateShow(1); delegate.showingRecents = true; delegate.endShow(); delegate.showingRecents = false
+            print("  ended while the recent files list is open: editing slide \(delegate.index + 1), canvas shows \(presentation.slides.firstIndex { $0 === delegate.canvas.slide }.map { $0 + 1 } ?? 0)")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
