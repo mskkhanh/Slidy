@@ -73,6 +73,8 @@ extension AppDelegate {
         let count = presentation?.slides.count ?? 0
         slideCountLabel.stringValue = count == 1 ? "1 slide" : "\(count) slides"
         slideCountLabel.isHidden = sidebarHidden || recentsMode || count == 0
+        slidePositionLabel.stringValue = "\(index + 1)/\(count)"
+        slidePositionLabel.isHidden = !sidebarHidden || count == 0
         scrollTop.constant = recentsMode ? 54 : 28
         headingButton.contentTintColor = .tertiaryLabelColor
         sidebarButton.contentTintColor = sidebarHidden ? .secondaryLabelColor : .tertiaryLabelColor

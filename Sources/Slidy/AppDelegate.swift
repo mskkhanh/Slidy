@@ -33,6 +33,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     var scrollTop: NSLayoutConstraint!
     let searchField = NSSearchField()
     let slideCountLabel = NSTextField(labelWithString: "")
+    /// "3/15" at the bottom left while the sidebar is hidden (full-width editing).
+    let slidePositionLabel = NSTextField(labelWithString: "")
     var searchQuery = ""
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false

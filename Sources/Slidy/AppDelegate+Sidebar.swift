@@ -36,6 +36,10 @@ extension AppDelegate {
         slideCountLabel.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(slideCountLabel)
         NSLayoutConstraint.activate([slideCountLabel.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 12), slideCountLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -6)])
+        slidePositionLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular); slidePositionLabel.textColor = NSColor(white: 0.5, alpha: 0.9)
+        slidePositionLabel.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(slidePositionLabel)
+        NSLayoutConstraint.activate([slidePositionLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12), slidePositionLabel.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -6)])
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 24, right: 0)
         searchField.target = self; searchField.action = #selector(filterChanged(_:))

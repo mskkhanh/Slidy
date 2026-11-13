@@ -612,6 +612,15 @@ extension Verification {
             let ratio = SlideThumb.frame(in: NSRect(x: 0, y: 0, width: width, height: 0)).width / width
             print("  thumbnail is \(Int((ratio * 100).rounded())) % of the column, centered: \(abs(SlideThumb.frame(in: NSRect(x: 0, y: 0, width: width, height: 0)).midX - width / 2) < 1)")
             let first = titles()
+            // Full-width editing (sidebar hidden): "x/n" at the bottom left, following the slide.
+            delegate.setSidebarHidden(true, remember: false, animated: false)
+            delegate.table.selectRowIndexes(IndexSet(integer: 4), byExtendingSelection: false)
+            print("  sidebar hidden: position label \"\(delegate.slidePositionLabel.stringValue)\" shown \(!delegate.slidePositionLabel.isHidden), total label hidden \(delegate.slideCountLabel.isHidden)")
+            delegate.window.layoutIfNeeded(); let f = delegate.slidePositionLabel.frame
+            print("  label at x \(Int(f.minX)), \(Int(delegate.window.contentView!.bounds.height - f.maxY)) from the bottom edge... y \(Int(f.minY))")
+            delegate.setSidebarHidden(false, remember: false, animated: false)
+            print("  sidebar shown: position label hidden \(delegate.slidePositionLabel.isHidden)")
+            delegate.table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
             // Several slides selected: the menu works on all of them.
             delegate.table.selectRowIndexes(IndexSet([1, 3]), byExtendingSelection: false)
             let menu = NSMenu(); delegate.fillSlideMenu(menu, row: 1)
