@@ -301,6 +301,7 @@ final class Presentation {
                 let props = cell.child("tcPr")
                 item.fill = color(props?.child("solidFill")); item.stroke = color(props?.child("lnB")?.child("solidFill")); item.strokeWidth = 0.7
                 configureText(item)
+                item.anchor = props?.attr("anchor") ?? "t"   // the cell's vertical alignment (t, ctr, b) lives on the cell, not on its text body
                 item.insets = NSEdgeInsets(top: (props?.number("marT", 45720) ?? 45720) / emu, left: (props?.number("marL", 91440) ?? 91440) / emu, bottom: (props?.number("marB", 45720) ?? 45720) / emu, right: (props?.number("marR", 91440) ?? 91440) / emu)
                 items.append(item); x += width
             }

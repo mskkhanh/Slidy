@@ -945,6 +945,16 @@ extension Verification {
                 let bottom = (layouts.last.map { $0.origin.y + $0.height } ?? 0) + holder.insets.bottom
                 if holder.frame.minY + bottom > cell.frame.maxY + 1 { hanging += 1 }
             }
+            var offCentre = 0, measured = 0
+            for cell in cells where !cell.text.isEmpty || slide.items.contains(where: { $0.cellTextOf == id && cell.frame.insetBy(dx: -1, dy: -1).contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) }) {
+                let holder = slide.items.first { $0.cellTextOf == id && cell.frame.insetBy(dx: -1, dy: -1).contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) } ?? cell
+                let layouts = layoutParagraphs(holder)
+                guard let first = layouts.first, let last = layouts.last else { continue }
+                let centre = holder.frame.minY + (first.origin.y + last.origin.y + last.height) / 2
+                measured += 1
+                if abs(centre - cell.frame.midY) > 1.5 { offCentre += 1 }
+            }
+            print("  text centered between the top and bottom of its cell: \(measured - offCentre) of \(measured) cells (anchor \(table.descendant("tcPr")?.attr("anchor") ?? "none"))")
             print("  cells whose text is taller than the cell: \(hanging) of \(cells.count); cell texts unchanged \(cells.map(\.text) == slideTextBefore)")
             if let first = cells.first(where: { !$0.text.isEmpty }) { print("  a cell: inner left margin \(String(format: "%.1f", first.insets.left)) pt (0.18 in = 13), top \(String(format: "%.1f", first.insets.top)) pt (0.12 in = 8.6)") }
             delegate.canvas.display(slide, in: presentation); delegate.window.layoutIfNeeded()

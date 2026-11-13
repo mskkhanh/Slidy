@@ -1,6 +1,7 @@
 import AppKit
 
-// Room to breathe in table cells: the margins inside every cell (<a:tcPr marL marR marT marB>, the PowerPoint way).
+// Room to breathe in table cells: the margins inside every cell (<a:tcPr marL marR marT marB>, the PowerPoint way) and the text
+// centered between top and bottom (anchor="ctr").
 // Rows grow with their text; the table keeps its width and its left edge.
 extension Presentation {
     static let tableMarginX = 164592.0   // 0.18 in, left and right
@@ -12,7 +13,7 @@ extension Presentation {
             guard let id = whole.tableID, let node = whole.tableNode else { return nil }
             let padded = node.descendants("tc").allSatisfy { tc in
                 guard let pr = tc.child("tcPr") else { return false }
-                return abs(pr.number("marL", -1) - Self.tableMarginX) < 1 && abs(pr.number("marR", -1) - Self.tableMarginX) < 1
+                return pr.attr("anchor") == "ctr" && abs(pr.number("marL", -1) - Self.tableMarginX) < 1 && abs(pr.number("marR", -1) - Self.tableMarginX) < 1
                     && abs(pr.number("marT", -1) - Self.tableMarginY) < 1 && abs(pr.number("marB", -1) - Self.tableMarginY) < 1
             }
             return padded ? nil : id
@@ -43,6 +44,7 @@ extension Presentation {
             }
             properties.set("marL", String(Int(marginX))); properties.set("marR", String(Int(marginX)))
             properties.set("marT", String(Int(marginY))); properties.set("marB", String(Int(marginY)))
+            properties.set("anchor", "ctr")   // the text sits in the middle of the cell, top to bottom
         }
         // Row heights: as tall as the tallest cell needs (never shorter than before).
         var index = 0
@@ -78,6 +80,7 @@ extension Presentation {
             if let properties = box.textBody?.child("bodyPr") {
                 properties.set("lIns", String(Int(marginX))); properties.set("rIns", String(Int(marginX)))
                 properties.set("tIns", String(Int(marginY))); properties.set("bIns", String(Int(marginY)))
+                properties.set("anchor", "ctr")
             }
             configureText(box)
             trimTextBox(box)
