@@ -15,21 +15,26 @@ final class LinkChip: NSView {
         layer?.cornerRadius = 7; layer?.backgroundColor = NSColor(white: 0.1, alpha: 0.96).cgColor
         layer?.borderWidth = 1; layer?.borderColor = NSColor(white: 0.45, alpha: 0.5).cgColor
         copy.isBordered = false; copy.font = .systemFont(ofSize: 11, weight: .semibold); copy.contentTintColor = AppDelegate.accent
+        copy.imagePosition = .imageLeading; copy.imageHugsTitle = true
+        setIcon("doc.on.doc")
         copy.target = self; copy.action = #selector(copyAddress)
         addSubview(copy)
         let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self, userInfo: nil)
         addTrackingArea(area)
     }
     required init?(coder: NSCoder) { fatalError() }
+    private func setIcon(_ name: String) {
+        copy.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 10, weight: .semibold))
+    }
     func show(_ address: String) {
         self.address = address
-        copy.title = "Copy"; copy.sizeToFit()
+        copy.title = " Copy"; setIcon("doc.on.doc"); copy.sizeToFit()
         frame.size = NSSize(width: copy.frame.width + 18, height: 22)
         copy.frame = NSRect(x: 9, y: (22 - copy.frame.height) / 2, width: copy.frame.width, height: copy.frame.height)
     }
     @objc func copyAddress() {
         NSPasteboard.general.clearContents(); NSPasteboard.general.setString(address, forType: .string)
-        copy.title = "Copied"; copy.sizeToFit()
+        copy.title = " Copied"; setIcon("checkmark"); copy.sizeToFit()
         frame.size.width = copy.frame.width + 18; copy.frame.origin.x = 9
     }
     override func mouseEntered(with event: NSEvent) { onEnter?() }
