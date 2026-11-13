@@ -28,7 +28,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Copy objects or a table (⌘C) and paste them (⌘V) on any slide, keeping their look and position; ⌘Z undoes the paste.
 - Double-click a picture to crop it (drag the handles, Return applies, Esc cancels). Saved as a standard crop, corners stay rounded.
 - Select all (⌘A) then F clears every Fade on the slide; select a group and press F to add Fade yourself. ⌘Z undoes it.
-- One click (wand button, top right, or ⇧⌘F) applies Fade, top to bottom, to the slides that have no effect yet and leaves the slides you animated by hand alone. It puts a period at the end of every sentence (headings, single sentences, each row of a list; labels, all-capital eyebrows and titles of up to three words are left alone). On every slide it also fits plain text boxes (no fill, no outline) to their text, without moving the text, so each order badge sits right above its text. A short report says what changed; ⌘Z undoes it.
+- One click (wand button, top right, or ⇧⌘F) applies Fade, top to bottom, to the slides that have no effect yet and leaves the slides you animated by hand alone. It gives table cells room to breathe (0.18 in left and right, 0.12 in top and bottom, saved as standard cell margins; rows grow with their text, the table keeps its width and left edge, and the report warns when a table gets taller than the slide). It puts a period at the end of every sentence (headings, single sentences, each row of a list; labels, all-capital eyebrows and titles of up to three words are left alone). On every slide it also fits plain text boxes (no fill, no outline) to their text, without moving the text, so each order badge sits right above its text. A short report says what changed; ⌘Z undoes it.
 - Presentation mode with the same fade steps (Play button or ⌘F). The slide number shows small at the bottom left; press delete (⌫) to go back to the previous slide, shown complete. ⌘↓ / ⌘↑ jump to the next / previous slide, also shown complete.
 - Pure black editing UI and a display-only night mode (⌘L) that never changes the file.
 - Press ⌘/ for the keyboard shortcuts that are special to Slidy.
@@ -83,6 +83,7 @@ Sources/Slidy/
   Presentation+Text.swift        text edits: content, list spacing, bold
   Presentation+TextFit.swift     text box size: grow, auto-fit, trim
   Presentation+TableText.swift   cell text split into text boxes
+  Presentation+TablePadding.swift cell margins and row heights of tables
   Presentation+Insert.swift      new text boxes and pictures
   Presentation+Links.swift       hyperlinks in text (hlinkClick and its relationship)
   AppDelegate+Links.swift        the Link… dialog and ⌘K

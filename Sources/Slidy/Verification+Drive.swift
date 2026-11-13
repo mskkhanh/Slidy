@@ -922,6 +922,41 @@ extension Verification {
             print("  second run adds \(again.periods) periods")
             return
         }
+        if ProcessInfo.processInfo.environment["TABLEPAD"] != nil {   // room inside table cells: margins in the XML, rows that grow, text boxes that follow
+            let slide = presentation.slides[slideIndex]
+            guard let whole = slide.items.first(where: \.isTableFrame), let id = whole.tableID, let table = whole.tableNode?.descendant("tbl") else { print("  no table on this slide"); return }
+            func rowsText() -> String { table.all("tr").map { String(Int(($0.number("h") / 914400 * 100).rounded())) }.joined(separator: " ") }   // hundredths of an inch
+            func margins() -> String { let pr = table.descendant("tcPr"); return "L \(Int(pr?.number("marL", 0) ?? 0)) R \(Int(pr?.number("marR", 0) ?? 0)) T \(Int(pr?.number("marT", 0) ?? 0)) B \(Int(pr?.number("marB", 0) ?? 0))" }
+            if ProcessInfo.processInfo.environment["TABLEPAD"] == "split" { print("  (a table that was split into text boxes before: \(presentation.splitCellText(ofTable: id, in: slide).count) boxes)") }
+            let before = (whole.frame, rowsText(), margins())
+            print("  before: table \(before.0.integral), rows (1/100 in) \(before.1), margins \(before.2)")
+            let slideTextBefore = slide.items.filter { $0.tableID == id && !$0.isTableFrame }.map(\.text)
+            let pictureBefore = Self.slidePicture(delegate.canvas)
+            let result = delegate.tidyDeck(presentation)
+            print("  wand: \(result.tablesPadded) table(s) padded, too tall for the slide: \(result.tableOverflows)")
+            print("  after:  table \(whole.frame.integral), rows \(rowsText()), margins \(margins())")
+            print("  same left edge and width: \(abs(whole.frame.minX - before.0.minX) < 0.5 && abs(whole.frame.width - before.0.width) < 0.5), table taller by \(Int(whole.frame.height - before.0.height)) pt, bottom at \(Int(whole.frame.maxY)) of \(Int(presentation.size.height))")
+            let cells = slide.items.filter { $0.tableID == id && !$0.isTableFrame }
+            var hanging = 0
+            for cell in cells {   // every cell's text fits inside its cell
+                let holder = slide.items.first { $0.cellTextOf == id && cell.frame.insetBy(dx: -1, dy: -1).contains(CGPoint(x: $0.frame.midX, y: $0.frame.midY)) } ?? cell
+                let anchor = holder.anchor; holder.anchor = "t"
+                let layouts = layoutParagraphs(holder); holder.anchor = anchor
+                let bottom = (layouts.last.map { $0.origin.y + $0.height } ?? 0) + holder.insets.bottom
+                if holder.frame.minY + bottom > cell.frame.maxY + 1 { hanging += 1 }
+            }
+            print("  cells whose text is taller than the cell: \(hanging) of \(cells.count); cell texts unchanged \(cells.map(\.text) == slideTextBefore)")
+            if let first = cells.first(where: { !$0.text.isEmpty }) { print("  a cell: inner left margin \(String(format: "%.1f", first.insets.left)) pt (0.18 in = 13), top \(String(format: "%.1f", first.insets.top)) pt (0.12 in = 8.6)") }
+            delegate.canvas.display(slide, in: presentation); delegate.window.layoutIfNeeded()
+            if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".tablepad.png")) }
+            print("  second wand: \(delegate.tidyDeck(presentation).tablesPadded) tables")
+            delegate.didChange(); delegate.flushSave()   // as the wand button does
+            if let again = try? Presentation(url: URL(fileURLWithPath: arguments[0])), let saved = again.slides[slideIndex].items.first(where: \.isTableFrame), let t = saved.tableNode?.descendant("tbl") {
+                print("  saved and reopened: margins \(t.descendant("tcPr").map { "L \(Int($0.number("marL"))) T \(Int($0.number("marT")))" } ?? "none"), rows \(t.all("tr").map { String(Int(($0.number("h") / 914400 * 100).rounded())) }.joined(separator: " ")), cell texts unchanged \(again.slides[slideIndex].items.filter { $0.tableID == saved.tableID && !$0.isTableFrame }.map(\.text) == slideTextBefore)")
+            }
+            _ = pictureBefore
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

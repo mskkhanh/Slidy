@@ -20,6 +20,7 @@ extension AppDelegate {
         checkpoint()
         var reselect: [SlideItem] = []
         for id in tables {
+            if presentation.tablesNeedingPadding(in: slide).contains(id) { presentation.padTable(id, in: slide) }   // room inside the cells
             guard let whole = slide.items.first(where: { $0.isTableFrame && $0.tableID == id }) else { continue }
             if whole.hasFade {
                 slide.removeFade(from: whole)
@@ -72,10 +73,11 @@ extension AppDelegate {
         let alert = NSAlert()
         // Look first, so a click that changes nothing leaves no undo step behind.
         let needed = !slidesWithoutEffects(in: presentation).isEmpty
+            || presentation.slides.contains { !presentation.tablesNeedingPadding(in: $0).isEmpty }
             || presentation.slides.contains { slide in slide.items.contains { presentation.periodsToAdd(in: $0) > 0 || presentation.trimTextBox($0, dryRun: true) } }
         guard needed else {
             alert.messageText = "Nothing to change"
-            alert.informativeText = "Every slide already has effects, every sentence ends with a period and every text box fits its text."
+            alert.informativeText = "Every slide already has effects, every sentence ends with a period, tables have room and every text box fits its text."
             alert.addButton(withTitle: "OK"); alert.runModal(); return
         }
         checkpointAll()
@@ -89,10 +91,21 @@ extension AppDelegate {
     /// What the wand changed.
     struct TidyResult {
         var faded = 0, trimmed = 0, trimmedSlides = 0, periods = 0, periodSlides = 0
+        var tablesPadded = 0
+        /// Slides whose table now reaches past the bottom of the slide (the text is not shrunk to fit).
+        var tableOverflows: [Int] = []
     }
     /// The work behind the wand button: periods at the end of sentences, boxes fitted to their text, Fade on slides without effects.
     func tidyDeck(_ presentation: Presentation) -> TidyResult {
         var result = TidyResult()
+        for (number, slide) in presentation.slides.enumerated() {
+            for id in presentation.tablesNeedingPadding(in: slide) {
+                if let bottom = presentation.padTable(id, in: slide) {
+                    result.tablesPadded += 1
+                    if bottom > presentation.size.height { result.tableOverflows.append(number + 1) }
+                }
+            }
+        }
         for slide in presentation.slides {
             let added = slide.items.reduce(0) { $0 + presentation.addSentencePeriods($1) }
             if added > 0 { result.periods += added; result.periodSlides += 1 }
@@ -111,6 +124,8 @@ extension AppDelegate {
         var lines: [String] = []
         lines.append(result.faded > 0 ? "Fade added to \(count(result.faded, "slide"))." : "Fade: no slide without effects.")
         lines.append(result.periods > 0 ? "Period added to \(count(result.periods, "line")) on \(count(result.periodSlides, "slide"))." : "Periods: every sentence already ends with one.")
+        if result.tablesPadded > 0 { lines.append("Table padding set on \(count(result.tablesPadded, "table")).") }
+        if !result.tableOverflows.isEmpty { lines.append("Too tall for the slide: the table on \(result.tableOverflows.count == 1 ? "slide" : "slides") \(result.tableOverflows.map(String.init).joined(separator: ", ")).") }
         lines.append(result.trimmed > 0 ? "\(count(result.trimmed, "text box")) fitted to their text on \(count(result.trimmedSlides, "slide"))." : "Text boxes: all already fit.")
         lines.append("⌘Z undoes it.")
         return lines.joined(separator: "\n")
