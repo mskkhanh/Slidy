@@ -134,7 +134,8 @@ extension CanvasView {
         } else { baseline = line.minY + line.height + font.descender }
         let height = font.ascender - font.descender
         let origin = editor.textContainerOrigin
-        let local = CGRect(x: origin.x + x, y: origin.y + baseline - font.ascender, width: 1.5, height: height)
+        let thickness = 3 / surfaceScale   // about 3 screen points, whatever the zoom
+        let local = CGRect(x: origin.x + x - thickness / 2, y: origin.y + baseline - font.ascender, width: thickness, height: height)
         overlay.caret = surface.convert(local, from: editor)
         hideSystemCaret()
         if restartBlink { overlay.caretOn = true }
