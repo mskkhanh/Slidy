@@ -96,6 +96,9 @@ final class CanvasView: NSView {
     let edgeShade = EdgeShade()
     var showsEdgeShade = false
     let linkChip = LinkChip()
+    /// The field for typing a link's address, while it is open.
+    var linkField: LinkField?
+    var linkFieldRange = NSRange(location: 0, length: 0)
     var linkTracking: NSTrackingArea?
     var linkHideTimer: Timer?
     var pendingLinkOpen: DispatchWorkItem?

@@ -20,6 +20,7 @@ extension AppDelegate {
     }
     @objc func addLink() {
         guard presentation != nil, !busy, window.attachedSheet == nil else { return }
+        if canvas.linkField != nil { canvas.hideLinkField(restoreFocus: true); return }   // ⌘K again closes it
         if canvas.editor == nil {   // an object is selected: link all of its text
             guard let item = canvas.selected, item.textBody != nil, !item.text.isEmpty else { NSSound.beep(); return }
             canvas.startEditing(selectContents: true)
@@ -28,29 +29,10 @@ extension AppDelegate {
         let range = editor.selectedRange()
         guard range.length > 0 else { NSSound.beep(); return }
         let current = editor.linkAddress(at: range.location)
-        let alert = NSAlert()
-        alert.messageText = current == nil ? "Add Link" : "Edit Link"
-        alert.informativeText = "Web address for the selected text."
-        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 22))
-        field.placeholderString = "https://"; field.stringValue = current ?? ""
-        alert.accessoryView = field
-        alert.addButton(withTitle: current == nil ? "Add" : "Update")
-        alert.addButton(withTitle: "Cancel")
-        if current != nil { alert.addButton(withTitle: "Remove Link") }
-        alert.window.initialFirstResponder = field
-        let response = alert.runModal()
-        window.makeFirstResponder(editor); editor.setSelectedRange(range)
-        switch response {
-        case .alertFirstButtonReturn:
-            guard let url = Self.linkURL(from: field.stringValue) else {
-                let bad = NSAlert(); bad.messageText = "That is not a web address."; bad.informativeText = "Use something like https://plancub.com."
-                bad.addButton(withTitle: "OK"); bad.runModal()
-                window.makeFirstResponder(editor); editor.setSelectedRange(range); return
-            }
-            applyLink(url, to: editor, range: range)
-        case .alertThirdButtonReturn: applyLink(nil, to: editor, range: range)
-        default: break
-        }
+        canvas.showLinkField(for: editor, range: range, current: current, onApply: { [weak self] text in
+            guard let url = Self.linkURL(from: text) else { return false }
+            self?.applyLink(url, to: editor, range: range); return true
+        }, onRemove: { [weak self] in self?.applyLink(nil, to: editor, range: range) })
     }
     func applyLink(_ url: URL?, to editor: InlineTextView, range: NSRange) {
         editor.setLink(url, in: range)

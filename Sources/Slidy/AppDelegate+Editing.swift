@@ -35,6 +35,8 @@ extension AppDelegate {
             editor.pasteAsPlainText(nil)
             return
         }
+        // Any other text being edited (the filter box, a name, the link field) takes the paste itself.
+        if let text = window.firstResponder as? NSTextView, text.isEditable { text.pasteAsPlainText(nil); return }
         guard let presentation, !busy, showWindow == nil else { return }
         if let payload = ObjectClipboard.read(), let slide = canvas.slide { pasteObjects(payload, into: slide, in: presentation); return }
         let clipboard = NSPasteboard.general

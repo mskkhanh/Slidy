@@ -739,6 +739,54 @@ extension Verification {
             print("  after undo: \(runs(presentation.slides[slideIndex].items.first { $0.id == item.id } ?? item))")
             return
         }
+        if ProcessInfo.processInfo.environment["LINKFIELD"] != nil {   // the small field for a link's address: paste works, Enter adds, Esc closes, Remove
+            let slide = presentation.slides[slideIndex]
+            guard let item = slide.items.first(where: { $0.canMove && !$0.hasList && $0.text.count > 14 && !$0.text.contains("\n") }) else { print("  no text"); return }
+            let n = delegate.window.windowNumber
+            func command(_ key: String) -> NSEvent { NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: n, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 0)! }
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            guard let editor = delegate.canvas.editor else { return }
+            editor.setSelectedRange(NSRange(location: 3, length: 6))
+            delegate.addLink()
+            guard let linkField = delegate.canvas.linkField else { print("  no field"); return }
+            delegate.window.layoutIfNeeded()
+            let selectionRight = delegate.canvas.surface.convert(CGPoint(x: item.frame.minX, y: item.frame.minY), to: delegate.canvas)
+            print("  field open: first responder is the field \(delegate.window.firstResponder is NSText && (delegate.window.firstResponder as? NSText)?.delegate === linkField.field), at (\(Int(linkField.frame.minX)),\(Int(linkField.frame.minY))) size \(Int(linkField.frame.width))x\(Int(linkField.frame.height)); text box starts at x \(Int(selectionRight.x)), y \(Int(selectionRight.y)) (the field sits above its selected words: \(linkField.frame.maxY <= delegate.canvas.convert(editor.bounds, from: editor).maxY))")
+            // ⌘V through the app's main menu (the bug: it did nothing here), then through the field itself.
+            NSPasteboard.general.clearContents(); NSPasteboard.general.setString("https://example.invalid/pasted", forType: .string)
+            _ = NSApp.mainMenu?.performKeyEquivalent(with: command("v"))
+            print("  ⌘V via the menu: \"\(linkField.field.currentEditor()?.string ?? linkField.field.stringValue)\"")
+            linkField.field.currentEditor()?.string = ""
+            _ = linkField.field.performKeyEquivalent(with: command("v"))
+            print("  ⌘V in the field: \"\(linkField.field.currentEditor()?.string ?? "")\"")
+            _ = linkField.field.performKeyEquivalent(with: command("a")); _ = linkField.field.performKeyEquivalent(with: command("c"))
+            print("  ⌘A ⌘C: selection \(linkField.field.currentEditor()?.selectedRange.length ?? 0) characters, clipboard \"\(NSPasteboard.general.string(forType: .string) ?? "")\"")
+            // A bad address keeps the field open and flags it; a good one adds the link and closes it.
+            linkField.field.currentEditor()?.string = "not an address"
+            linkField.onSubmit?("not an address")
+            print("  bad address: still open \(delegate.canvas.linkField != nil), no link yet \(editor.linkAddress(at: 4) == nil)")
+            linkField.onSubmit?("https://example.invalid/pasted")
+            print("  Enter: field closed \(delegate.canvas.linkField == nil), link \(editor.linkAddress(at: 4) ?? "nil"), focus back in the editor \(delegate.window.firstResponder === editor), caret after the words \(editor.selectedRange())")
+            // Open again on a linked word: it shows the address and a Remove button; Esc closes without changes.
+            editor.setSelectedRange(NSRange(location: 3, length: 6)); delegate.addLink()
+            let again = delegate.canvas.linkField
+            print("  reopened: shows \"\(again?.field.stringValue ?? "")\", Remove visible \(again.map { $0.frame.width > 250 } ?? false)")
+            again?.onCancel?()
+            print("  Esc: closed \(delegate.canvas.linkField == nil), link kept \(editor.linkAddress(at: 4) != nil)")
+            delegate.addLink(); delegate.addLink()
+            print("  ⌘K twice: open then closed \(delegate.canvas.linkField == nil)")
+            editor.setSelectedRange(NSRange(location: 3, length: 6)); delegate.addLink()
+            if let screenshotField = delegate.canvas.linkField, let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.2)); _ = screenshotField
+                content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".linkfield.png"))
+            }
+            delegate.canvas.linkField?.onRemove?()
+            print("  Remove: link gone \(editor.linkAddress(at: 4) == nil)")
+            delegate.canvas.finishEditing(commit: true)
+            print("  editing ends: field closed \(delegate.canvas.linkField == nil); saved text unchanged \(item.text.count > 14)")
+            for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

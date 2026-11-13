@@ -173,6 +173,7 @@ extension CanvasView {
     }
     func finishEditing(commit: Bool) {
         guard let editor else { return }
+        hideLinkField(restoreFocus: false)
         if commit, let item = selected {
             let existingBullets = Set(item.paragraphs.indices.filter { item.paragraphs[$0].bullet != nil })
             let existingNumbered = Set(item.paragraphs.indices.filter { item.paragraphs[$0].isNumbered })
