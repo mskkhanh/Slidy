@@ -27,7 +27,8 @@ extension AppDelegate {
         insert.addItem(menuItem("Text · T", #selector(addText))); insert.addItem(menuItem("Heading · H", #selector(addHeading))); insert.addItem(menuItem("Bullet List", #selector(addList))); insert.addItem(menuItem("Picture…", #selector(addImage))); insert.addItem(menuItem("Link…", #selector(linkOrFilter), key: "k"))
         let insertItem = NSMenuItem(); insertItem.submenu = insert; menu.addItem(insertItem)
         let play = NSMenu(title: "Present"); play.addItem(menuItem("From Current Slide", #selector(presentSlides), key: "f"))
-        play.addItem(menuItem("Auto Fade and Trim Text Boxes", #selector(fadeAllSlides)))
+        let wand = menuItem("Auto Fade and Fit Text Boxes", #selector(fadeAllSlides), key: "f"); wand.keyEquivalentModifierMask = [.command, .shift]
+        play.addItem(wand)
         let playItem = NSMenuItem(); playItem.submenu = play; menu.addItem(playItem)
         let view = NSMenu(title: "View")
         view.addItem(menuItem("Recent Files", #selector(showRecentFiles), key: "1"))

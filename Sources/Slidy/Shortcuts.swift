@@ -6,19 +6,23 @@ enum Shortcuts {
     static let sections: [(title: String, items: [(keys: String, action: String)])] = [
         ("Objects", [
             ("T · H", "Add text · heading"),
-            ("F", "Toggle Fade"),
-            ("⌘B", "Bold"),
-            ("⇧↑ / ⇧↓", "Reorder Fade"),
             ("⌥⌘↑ / ⌥⌘↓", "Move layer"),
-            ("⌥-click", "Select underneath"),
+            ("⌥-click", "Select underneath")
+        ]),
+        ("Fade", [
+            ("F", "Toggle Fade"),
+            ("⇧↑ / ⇧↓", "Reorder Fade"),
+            ("⇧⌘F", "Wand: Fade all, fit boxes")
+        ]),
+        ("Text", [
+            ("⌘B", "Bold"),
             ("⌘V", "Paste a link onto text"),
-            ("Wand button", "Auto Fade, trim text boxes")
+            ("⌘K", "Link · Filter files")
         ]),
         ("Slides", [
             ("⌘↑ / ⌘↓", "Previous / next slide"),
             ("⌘↑ / ⌘↓", "Move slide (list)"),
             ("⌘1 · ⌘E", "Recent files"),
-            ("⌘K", "Link · Filter files"),
             ("⌘2", "Slides")
         ]),
         ("View", [
@@ -46,8 +50,8 @@ private final class KeyCap: NSView {
         label.font = .monospacedSystemFont(ofSize: 11.5, weight: .medium)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 7), label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -7),
+        NSLayoutConstraint.activate([   // the text is centered, so every keycap can have the same width
+            label.centerXAnchor.constraint(equalTo: centerXAnchor), label.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 7),
             label.topAnchor.constraint(equalTo: topAnchor, constant: 2), label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2)
         ])
     }
@@ -73,7 +77,7 @@ final class ShortcutsPanel: NSPanel {
                     capSlot.addSubview(cap)
                     NSLayoutConstraint.activate([
                         capSlot.widthAnchor.constraint(equalToConstant: 112),
-                        cap.leadingAnchor.constraint(equalTo: capSlot.leadingAnchor), cap.topAnchor.constraint(equalTo: capSlot.topAnchor), cap.bottomAnchor.constraint(equalTo: capSlot.bottomAnchor)
+                        cap.leadingAnchor.constraint(equalTo: capSlot.leadingAnchor), cap.trailingAnchor.constraint(equalTo: capSlot.trailingAnchor), cap.topAnchor.constraint(equalTo: capSlot.topAnchor), cap.bottomAnchor.constraint(equalTo: capSlot.bottomAnchor)
                     ])
                     let action = NSTextField(labelWithString: item.action)
                     action.font = .systemFont(ofSize: 12.5)

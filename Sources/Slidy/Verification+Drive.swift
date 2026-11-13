@@ -319,6 +319,9 @@ extension Verification {
                 try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".badges.png"))
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            if let wandItem = NSApp.mainMenu?.items.flatMap({ $0.submenu?.items ?? [] }).first(where: { $0.action == #selector(AppDelegate.fadeAllSlides) }) {
+                print("  wand menu item: \"\(wandItem.title)\" key \(wandItem.keyEquivalentModifierMask.contains(.command) ? "⌘" : "")\(wandItem.keyEquivalentModifierMask.contains(.shift) ? "⇧" : "")\(wandItem.keyEquivalent.uppercased())")
+            }
             print("  wand: \(plain.count) slides without effects got Fade (\(changed) now have it), \(untouched) slides with effects or no objects untouched, wrong: \(wrong)")
             return
         }

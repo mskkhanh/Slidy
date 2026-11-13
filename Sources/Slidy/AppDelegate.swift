@@ -130,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
             ?? NSImage(systemSymbolName: "sparkles", accessibilityDescription: "Fade All Slides")
         fadeAllButton.isBordered = false; fadeAllButton.target = self; fadeAllButton.action = #selector(fadeAllSlides)
         fadeAllButton.contentTintColor = .secondaryLabelColor
-        fadeAllButton.toolTip = "Fade slides without effects, trim text boxes"
+        fadeAllButton.toolTip = "Fade slides without effects, fit text boxes (⇧⌘F)"
         fadeAllButton.setAccessibilityLabel("Fade All Slides")
         let toolbar = NSStackView(views: [fadeAllButton, nightButton, playButton])
         toolbar.orientation = .horizontal; toolbar.spacing = 10

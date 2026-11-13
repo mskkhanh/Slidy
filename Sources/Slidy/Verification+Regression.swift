@@ -390,7 +390,7 @@ extension Verification {
             guard !Shortcuts.sections.flatMap({ $0.items.map { $0.keys + $0.action } + [$0.title] }).contains(where: { $0.contains(where: { "ăâđêôơưáàảãạéèẻẽẹíìỉĩịóòỏõọúùủũụýỳỷỹỵ".contains($0) }) }) else { throw AppError.message("Vietnamese text in the shortcut list") }
             // The ⌘/ list is complete and short.
             let shortcutText = Shortcuts.sections.flatMap { $0.items }.map { "\($0.keys) \($0.action)" }
-            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘B", "⌘L", "⌘0", "⌘E", "⌘F · ⌘Enter", "T · H", "⌥-click", "Wand button"] {
+            for required in ["⌘↑ / ⌘↓", "⇧↑ / ⇧↓", "⌘B", "⌘L", "⌘0", "⌘E", "⌘F · ⌘Enter", "T · H", "⌥-click", "⇧⌘F"] {
                 guard shortcutText.contains(where: { $0.contains(required) }) else { throw AppError.message("Shortcut list is missing \(required)") }
             }
             // Features that still work but are deliberately not listed.
