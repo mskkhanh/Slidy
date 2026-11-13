@@ -8,7 +8,7 @@ A small, fast macOS app for viewing, lightly editing and presenting `.pptx` slid
 - Edits save straight into the original file. Quit is instant, and the app reopens the last file at the last slide.
 - Every bullet and numbered list always uses one standard line spacing (line height 1.94 × the font size): applied automatically when a deck is opened and whenever a slide is shown, and saved by autosave.
 - Add and edit text, headings, bullet and numbered lists (type `1` + Space or `-` + Space) and images (inserted pictures get slightly rounded corners).
-- Fade animations with numbered order badges on the slide: select an object and press ⇧↑ / ⇧↓ to reorder.
+- Fade animations with numbered order badges on the slide: select an object and press ⇧↑ / ⇧↓ to reorder; ⌘H shows or hides the numbers (remembered).
 - F on a table fades the table in first, then the text of each cell, left to right and top to bottom. A .pptx table can only be animated as a whole, so each cell's text moves into its own text box over the cell (the slide looks the same; the group still selects, moves and deletes together; ⌘Z undoes it).
 - ⌥⌘↑ / ⌥⌘↓ move the selected object one layer forward / backward per press (a table moves as a whole).
 - ⌘G groups the selected Fade effects (one number, link icon); ⇧↑/⇧↓ reorders them (⌘↑/↓ switches slides); ⌘↑/↓ switches slides (or, with the slide list focused, moves the selected slide up/down in the deck); ⌘S hides / shows the sidebar (three small buttons at its top right: recent files, slides, hide / show; the last stays visible when the sidebar is collapsed).

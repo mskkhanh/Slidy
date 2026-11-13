@@ -12,7 +12,8 @@ enum Shortcuts {
         ("Fade", [
             ("F", "Toggle Fade"),
             ("⇧↑ / ⇧↓", "Reorder Fade"),
-            ("⇧⌘F", "Wand: Fade all, fit boxes")
+            ("⇧⌘F", "Wand: Fade all, fit boxes"),
+            ("⌘H", "Show / hide Fade numbers")
         ]),
         ("Text", [
             ("⌘B", "Bold"),

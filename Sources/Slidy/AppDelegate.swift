@@ -35,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
     let slideCountLabel = NSTextField(labelWithString: "")
     /// "3/15" at the bottom left while the sidebar is hidden (full-width editing).
     let slidePositionLabel = NSTextField(labelWithString: "")
+    var fadeNumbersItem: NSMenuItem?
     var searchQuery = ""
     /// Set while the list highlights the open file, so highlighting is not mistaken for a click.
     var suppressSelectionOpen = false
@@ -180,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSTa
         ])
         sidebarViews = [scroll, separator, sidebarHeader, recentsButton, slidesButton, sidebarResizeHandle]
         setSidebarHidden(sidebarHidden, remember: false, animated: false)
-        canvas.showsOrderBadges = true
+        canvas.showsOrderBadges = UserDefaults.standard.object(forKey: "showFadeNumbers") as? Bool ?? true
         canvas.usesNightMode = true
         canvas.showsEdgeShade = true
         canvas.onMoveLayer = { [weak self] delta in self?.moveLayer(by: delta) }

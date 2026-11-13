@@ -37,6 +37,10 @@ extension AppDelegate {
         view.addItem(menuItem("Collapse All Headings", #selector(collapseAllHeadings)))
         view.addItem(menuItem("Expand All Headings", #selector(expandAllHeadings)))
         view.addItem(.separator())
+        let numbers = menuItem("Fade Numbers", #selector(toggleFadeNumbers), key: "h")
+        numbers.state = canvas.showsOrderBadges ? .on : .off
+        fadeNumbersItem = numbers
+        view.addItem(numbers)
         view.addItem(menuItem("Night / Light Mode", #selector(toggleNight), key: "l"))
         view.addItem(menuItem("Hide / Show Sidebar", #selector(toggleSidebar), key: "s"))
         view.addItem(menuItem("Fit to Window", #selector(fitZoom), key: "0"))
@@ -62,6 +66,13 @@ extension AppDelegate {
         if presentation != nil, !showingRecents { table.reloadData() }
     }
     @objc func fitZoom() { canvas.resetZoom() }
+    /// ⌘H: shows or hides the small Fade order numbers beside the objects (editing aid only; remembered).
+    @objc func toggleFadeNumbers() {
+        canvas.showsOrderBadges.toggle()
+        UserDefaults.standard.set(canvas.showsOrderBadges, forKey: "showFadeNumbers")
+        fadeNumbersItem?.state = canvas.showsOrderBadges ? .on : .off
+        canvas.updateOrderBadges()
+    }
     @objc func toggleSidebar() { setSidebarHidden(!sidebarHidden) }
     @objc func showRecentFiles() { if presentation != nil, !showingRecents { toggleRecents() } }
     @objc func showSlides() { if presentation != nil, showingRecents { toggleRecents() } }

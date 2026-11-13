@@ -967,6 +967,21 @@ extension Verification {
             _ = pictureBefore
             return
         }
+        if ProcessInfo.processInfo.environment["FADENUMBERS"] != nil {   // ⌘H shows / hides the Fade order numbers
+            let slide = presentation.slides[slideIndex]
+            delegate.canvas.display(slide, in: presentation); delegate.canvas.showsOrderBadges = true; delegate.canvas.updateOrderBadges()
+            let n = delegate.window.windowNumber
+            func command(_ key: String) { _ = NSApp.mainMenu?.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: n, context: nil, characters: key, charactersIgnoringModifiers: key, isARepeat: false, keyCode: 4)!) }
+            let item = NSApp.mainMenu?.items.flatMap { $0.submenu?.items ?? [] }.first { $0.action == #selector(AppDelegate.toggleFadeNumbers) }
+            print("  menu: \"\(item?.title ?? "none")\" key ⌘\(item?.keyEquivalent.uppercased() ?? "?"), numbers shown \(delegate.canvas.badgeFrames.count) (Fade objects on this slide: \(slide.fadeGroups.flatMap { $0 }.count))")
+            command("h")
+            print("  ⌘H: numbers shown \(delegate.canvas.badgeFrames.count), menu check \(item?.state == .on ? "on" : "off"), remembered \(UserDefaults.standard.object(forKey: "showFadeNumbers") as? Bool ?? true)")
+            delegate.canvas.select([]); delegate.canvas.rebuild()
+            print("  still hidden after the slide is rebuilt: \(delegate.canvas.badgeFrames.isEmpty)")
+            command("h")
+            print("  ⌘H again: numbers shown \(delegate.canvas.badgeFrames.count), menu check \(item?.state == .on ? "on" : "off")")
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)
