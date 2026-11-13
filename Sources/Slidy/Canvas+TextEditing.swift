@@ -25,8 +25,8 @@ extension CanvasView {
             let text = night ? NightMode.text(paragraph.text) : paragraph.text
             var attributes: [NSAttributedString.Key: Any] = text.length > 0 ? text.attributes(at: 0, effectiveRange: nil) : [.font: fallbackFont, .foregroundColor: fallbackColor]
             // The first character may be linked; the list marker and the typing style must not inherit the link.
-            if attributes[.link] != nil {
-                attributes[.link] = nil; attributes[.underlineStyle] = nil
+            if attributes[.slidyLink] != nil {
+                attributes[.slidyLink] = nil; attributes[.underlineStyle] = nil
             }
             let style = NSMutableParagraphStyle()
             style.alignment = paragraph.alignment

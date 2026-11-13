@@ -3,6 +3,11 @@ import AppKit
 // Hyperlinks in text: <a:hlinkClick r:id="..."/> inside a run's properties, with the address in the slide's relationships
 // (Type .../hyperlink, TargetMode External). PowerPoint reads the same markup.
 
+extension NSAttributedString.Key {
+    /// The address of a linked run. Not `.link`: AppKit paints that attribute blue by itself, and links here keep the text's own color.
+    static let slidyLink = NSAttributedString.Key("slidyLink")
+}
+
 extension Presentation {
     /// rId -> address of every external hyperlink of a slide.
     func hyperlinkTargets(_ slidePath: String) -> [String: String] {
@@ -73,7 +78,7 @@ extension Presentation {
     /// How a linked run is drawn in Slidy: just underlined, the text keeps its own color.
     func linkAttributes(_ base: [NSAttributedString.Key: Any], url: URL) -> [NSAttributedString.Key: Any] {
         var result = base
-        result[.link] = url
+        result[.slidyLink] = url
         result[.underlineStyle] = NSUnderlineStyle.single.rawValue
         return result
     }

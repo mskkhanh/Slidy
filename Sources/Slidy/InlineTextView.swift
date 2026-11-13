@@ -50,7 +50,7 @@ final class InlineTextView: NSTextView {
     /// The address linked to the character at `index`, if any.
     func linkAddress(at index: Int) -> String? {
         guard let storage = textStorage, index >= 0, index < storage.length else { return nil }
-        return (storage.attribute(.link, at: index, effectiveRange: nil) as? URL)?.absoluteString
+        return (storage.attribute(.slidyLink, at: index, effectiveRange: nil) as? URL)?.absoluteString
     }
     /// Links `range` to `url` (or removes the link when `url` is nil). The text keeps its other formatting.
     func setLink(_ url: URL?, in range: NSRange) {
@@ -58,10 +58,10 @@ final class InlineTextView: NSTextView {
         storage.beginEditing()
         storage.enumerateAttributes(in: range) { attributes, part, _ in
             if let url {   // underlined; the color stays the text's own
-                storage.addAttribute(.link, value: url, range: part)
+                storage.addAttribute(.slidyLink, value: url, range: part)
                 storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: part)
-            } else if attributes[.link] != nil {
-                storage.removeAttribute(.link, range: part)
+            } else if attributes[.slidyLink] != nil {
+                storage.removeAttribute(.slidyLink, range: part)
                 storage.removeAttribute(.underlineStyle, range: part)
             }
         }

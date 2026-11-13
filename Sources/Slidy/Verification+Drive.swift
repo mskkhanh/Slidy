@@ -708,10 +708,11 @@ extension Verification {
             delegate.flushSave()
             let again = try? Presentation(url: url)
             let savedItem = again?.slides[slideIndex].items.first { $0.id == item.id }
-            let linkedText = savedItem?.paragraphs.first.map { p -> String in var out = ""; p.text.enumerateAttribute(.link, in: NSRange(location: 0, length: p.text.length)) { v, r, _ in if v != nil { out += "«" + (p.text.string as NSString).substring(with: r) + "»" } }; return out } ?? ""
+            let linkedText = savedItem?.paragraphs.first.map { p -> String in var out = ""; p.text.enumerateAttribute(.slidyLink, in: NSRange(location: 0, length: p.text.length)) { v, r, _ in if v != nil { out += "«" + (p.text.string as NSString).substring(with: r) + "»" } }; return out } ?? ""
             print("  saved and reopened: linked text \(linkedText), text unchanged \(savedItem?.text == before)")
             // Hover shows the chip, Copy puts the address on the clipboard, leaving hides it. A click schedules the opening (not run here).
             delegate.canvas.display(slide, in: presentation); delegate.window.layoutIfNeeded(); delegate.canvas.layoutSubtreeIfNeeded()
+            if let p = item.paragraphs.first { print("  attributes at the link: \(p.text.attributes(at: 4, effectiveRange: nil).map { "\($0.key.rawValue)=\($0.value)" }.sorted())") }
             guard let found = delegate.canvas.linkAt(CGPoint(x: item.frame.minX + 40, y: item.frame.minY + 8)) ?? slide.items.compactMap({ i in delegate.canvas.linkAt(CGPoint(x: i.frame.midX, y: i.frame.midY)) }).first else { print("  no link found on the slide"); return }
             print("  link under the pointer: \(found.url.absoluteString), rect \(found.rect.integral)")
             let at = delegate.canvas.surface.convert(CGPoint(x: found.rect.midX, y: found.rect.midY), to: nil)
@@ -721,6 +722,14 @@ extension Verification {
             print("  hover: chip shown \(!chip.isHidden), address \(chip.address), above the link \(chip.frame.maxY <= delegate.canvas.surface.convert(found.rect, to: delegate.canvas).minY + 1)")
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
             if let content = delegate.window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) { content.cacheDisplay(in: content.bounds, to: bitmap); try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: arguments[0] + ".link.png")) }
+            // The pointer travels from the link onto the chip: the chip must stay (the bug was that it vanished).
+            let chipCentre = delegate.canvas.convert(CGPoint(x: chip.frame.midX, y: chip.frame.midY), to: nil)
+            delegate.canvas.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: delegate.canvas.convert(CGPoint(x: chip.frame.midX, y: chip.frame.maxY + 2), to: nil), modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 5, clickCount: 0, pressure: 0)!)   // in the gap below the chip
+            delegate.canvas.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: chipCentre, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 6, clickCount: 0, pressure: 0)!)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            delegate.canvas.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: chipCentre, modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 7, clickCount: 0, pressure: 0)!)
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            print("  pointer resting on the chip for 2 s: chip still shown \(!chip.isHidden), chip \(Int(chip.frame.width))x\(Int(chip.frame.height)) (just a Copy button)")
             chip.copyAddress()
             print("  copied: \(NSPasteboard.general.string(forType: .string) ?? "")")
             let away = NSEvent.mouseEvent(with: .mouseMoved, location: delegate.canvas.surface.convert(CGPoint(x: 2, y: 2), to: nil), modifierFlags: [], timestamp: 0, windowNumber: delegate.window.windowNumber, context: nil, eventNumber: 2, clickCount: 0, pressure: 0)!
@@ -734,7 +743,7 @@ extension Verification {
             delegate.canvas.selected = item; delegate.canvas.startEditing()
             if let e = delegate.canvas.editor { let r = NSRange(location: 0, length: 9); e.setSelectedRange(r); delegate.applyLink(nil, to: e, range: r) }
             delegate.canvas.finishEditing(commit: true)
-            print("  link removed: \(runs(item)); no links left \(item.paragraphs.allSatisfy { p in var any = false; p.text.enumerateAttribute(.link, in: NSRange(location: 0, length: p.text.length)) { v, _, _ in if v != nil { any = true } }; return !any })")
+            print("  link removed: \(runs(item)); no links left \(item.paragraphs.allSatisfy { p in var any = false; p.text.enumerateAttribute(.slidyLink, in: NSRange(location: 0, length: p.text.length)) { v, _, _ in if v != nil { any = true } }; return !any })")
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             print("  after undo: \(runs(presentation.slides[slideIndex].items.first { $0.id == item.id } ?? item))")
             return
@@ -798,12 +807,12 @@ extension Verification {
             let original = editor.string
             let colorBefore = editor.textStorage?.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor
             for (label, text, selection) in [("https link", "https://example.invalid/a?b=1", NSRange(location: 3, length: 6)), ("www link", "www.example.invalid", NSRange(location: 10, length: 4)), ("mailto", "mailto:me@example.invalid", NSRange(location: 0, length: 2)), ("link, nothing selected", "https://example.invalid/x", NSRange(location: 5, length: 0)), ("plain words", "hello world", NSRange(location: 3, length: 2)), ("link with a sentence", "https://example.invalid/x and more", NSRange(location: 3, length: 2)), ("a bare domain", "plancub.com", NSRange(location: 3, length: 2))] {
-                editor.string = original; editor.textStorage?.removeAttribute(.link, range: NSRange(location: 0, length: editor.string.utf16.count))
+                editor.string = original; editor.textStorage?.removeAttribute(.slidyLink, range: NSRange(location: 0, length: editor.string.utf16.count))
                 editor.setSelectedRange(selection); clipboard(text); paste()
                 let linked = (0..<(editor.string as NSString).length).filter { editor.linkAddress(at: $0) != nil }
                 print("  \(label): text \(editor.string == original ? "unchanged" : "changed"), linked characters \(linked.first.map { "\($0)-\(linked.last ?? $0)" } ?? "none"), caret \(editor.selectedRange().location)")
             }
-            editor.string = original; editor.textStorage?.removeAttribute(.link, range: NSRange(location: 0, length: editor.string.utf16.count))
+            editor.string = original; editor.textStorage?.removeAttribute(.slidyLink, range: NSRange(location: 0, length: editor.string.utf16.count))
             editor.setSelectedRange(NSRange(location: 3, length: 6)); clipboard("https://example.invalid/color"); paste()
             let colorAfter = editor.textStorage?.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor
             print("  linked words: underlined \((editor.textStorage?.attribute(.underlineStyle, at: 4, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue), same color as before \(colorBefore == colorAfter)")
@@ -812,7 +821,7 @@ extension Verification {
             let drawn = item.paragraphs.first?.text
             let at = drawn.map { $0.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor }
             let neighbour = drawn.map { $0.attribute(.foregroundColor, at: 1, effectiveRange: nil) as? NSColor }
-            print("  on the slide: link \(item.paragraphs.first?.text.attribute(.link, at: 4, effectiveRange: nil) != nil), color same as the words around it \(at == neighbour)")
+            print("  on the slide: link \(item.paragraphs.first?.text.attribute(.slidyLink, at: 4, effectiveRange: nil) != nil), color same as the words around it \(at == neighbour)")
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             return
         }
