@@ -286,6 +286,9 @@ extension Verification {
             var pictures: [NSBitmapImageRep?] = []
             for slide in presentation.slides { delegate.canvas.display(slide, in: presentation); pictures.append(shot()) }
             let widths: [CGFloat] = presentation.slides.map { $0.items.filter(\.canMove).map(\.frame.width).reduce(0, +) }
+            func need(_ item: SlideItem) -> String { let anchor = item.anchor; item.anchor = "t"; let l = layoutParagraphs(item); item.anchor = anchor; return "frame \(item.frame.integral.size) needs \(Int((l.last.map { $0.origin.y + $0.height } ?? 0) + item.insets.bottom)) lines \(l.map { Int($0.height) }) autofit \(item.autoFit)" }
+            let probe = presentation.slides.flatMap(\.items).first { $0.text.hasPrefix("Việc công vi") || $0.text.hasPrefix("Inbox") }
+            if let probe { print("  probe before: \(need(probe))") }
             let first = delegate.tidyDeck(presentation)
             var worst = 0, worstSlide = 0
             for (index, slide) in presentation.slides.enumerated() { delegate.canvas.display(slide, in: presentation); let d = Self.differing(pictures[index], shot()); if d > worst { worst = d; worstSlide = index + 1 } }
@@ -293,6 +296,18 @@ extension Verification {
             var narrower = 0
             for (a, b) in zip(widths, widthsAfter) where a - b > 1 { narrower += 1 }
             print("  trim: \(first.trimmed) text boxes on \(first.trimmedSlides) slides; slides with narrower boxes \(narrower); biggest change in any slide picture: \(worst) pixels (slide \(worstSlide))")
+            if let probe { print("  probe after:  \(need(probe))") }
+            // Every text box must still contain all of its text after the wand (the text may not hang out of the frame).
+            var hanging: [String] = []
+            for (number, slide) in presentation.slides.enumerated() {
+                for item in slide.items where item.canMove && item.textBody != nil && !item.text.isEmpty && item.imageURL == nil {
+                    let anchor = item.anchor; item.anchor = "t"
+                    let layouts = layoutParagraphs(item); item.anchor = anchor
+                    let bottom = (layouts.last.map { $0.origin.y + $0.height } ?? 0) + item.insets.bottom
+                    if bottom > item.frame.height + 1.5 { hanging.append("slide \(number + 1) \"\(item.text.prefix(12))\": text needs \(Int(bottom)) pt, frame \(Int(item.frame.height)) pt\(item.autoFit ? " (auto-fit)" : "")") }
+                }
+            }
+            print("  text outside its frame after the wand: \(hanging.count) \(hanging.prefix(4))")
             print("  report: \(AppDelegate.tidyReport(first).replacingOccurrences(of: "\n", with: " | "))")
             let second = delegate.tidyDeck(presentation)
             print("  second run: \(second.trimmed) trimmed, \(second.faded) faded -> \(AppDelegate.tidyReport(second).replacingOccurrences(of: "\n", with: " | "))")

@@ -80,13 +80,13 @@ extension Presentation {
             frame.size.width = width
         }
         let used = (layouts.last.map { $0.origin.y + $0.height } ?? item.insets.top) + item.insets.bottom
-        let height = min(frame.height, max(12, ceil(used)))
+        let height = max(12, ceil(used))   // exactly the text: shorter boxes shrink, boxes the text overflows grow
         if anchor == "ctr" { frame.origin.y += (frame.height - height) / 2 } else if anchor == "b" { frame.origin.y += frame.height - height }
         frame.size.height = height
         // A one-line, left-aligned box becomes auto-fit, so it grows again when more text is typed.
         let bodyPr = item.textBody?.child("bodyPr")
         let makesAutoFit = !wraps && !item.autoFit && anchor == "t" && (alignments == [.left] || alignments == [.natural]) && bodyPr != nil
-        let shrinks = item.frame.width - frame.width >= 2 || item.frame.height - frame.height >= 2
+        let shrinks = item.frame.width - frame.width >= 2 || abs(item.frame.height - frame.height) >= 2
         guard shrinks || makesAutoFit else { return false }
         if dryRun { return true }
         if makesAutoFit, let bodyPr {

@@ -101,7 +101,7 @@ extension AppDelegate {
         func count(_ number: Int, _ noun: String) -> String { "\(number) \(noun)\(number == 1 ? "" : (noun.hasSuffix("x") ? "es" : "s"))" }
         var lines: [String] = []
         lines.append(result.faded > 0 ? "Fade added to \(count(result.faded, "slide"))." : "Fade: no slide without effects.")
-        lines.append(result.trimmed > 0 ? "\(count(result.trimmed, "text box")) trimmed on \(count(result.trimmedSlides, "slide"))." : "Text boxes: all already fit.")
+        lines.append(result.trimmed > 0 ? "\(count(result.trimmed, "text box")) fitted to their text on \(count(result.trimmedSlides, "slide"))." : "Text boxes: all already fit.")
         lines.append("⌘Z undoes it.")
         return lines.joined(separator: "\n")
     }
