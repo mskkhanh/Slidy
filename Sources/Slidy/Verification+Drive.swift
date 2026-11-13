@@ -787,6 +787,35 @@ extension Verification {
             for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
             return
         }
+        if ProcessInfo.processInfo.environment["LINKPASTE"] != nil {   // ⌘V with a link on the clipboard links the selected text; anything else pastes normally
+            let slide = presentation.slides[slideIndex]
+            guard let item = slide.items.first(where: { $0.canMove && !$0.hasList && $0.text.count > 14 && !$0.text.contains("\n") }) else { print("  no text"); return }
+            let n = delegate.window.windowNumber
+            func clipboard(_ text: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(text, forType: .string) }
+            func paste() { delegate.window.makeFirstResponder(delegate.canvas.editor); _ = NSApp.mainMenu?.performKeyEquivalent(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0, windowNumber: n, context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9)!) }
+            delegate.canvas.selected = item; delegate.canvas.startEditing()
+            guard let editor = delegate.canvas.editor else { return }
+            let original = editor.string
+            let colorBefore = editor.textStorage?.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor
+            for (label, text, selection) in [("https link", "https://example.invalid/a?b=1", NSRange(location: 3, length: 6)), ("www link", "www.example.invalid", NSRange(location: 10, length: 4)), ("mailto", "mailto:me@example.invalid", NSRange(location: 0, length: 2)), ("link, nothing selected", "https://example.invalid/x", NSRange(location: 5, length: 0)), ("plain words", "hello world", NSRange(location: 3, length: 2)), ("link with a sentence", "https://example.invalid/x and more", NSRange(location: 3, length: 2)), ("a bare domain", "plancub.com", NSRange(location: 3, length: 2))] {
+                editor.string = original; editor.textStorage?.removeAttribute(.link, range: NSRange(location: 0, length: editor.string.utf16.count))
+                editor.setSelectedRange(selection); clipboard(text); paste()
+                let linked = (0..<(editor.string as NSString).length).filter { editor.linkAddress(at: $0) != nil }
+                print("  \(label): text \(editor.string == original ? "unchanged" : "changed"), linked characters \(linked.first.map { "\($0)-\(linked.last ?? $0)" } ?? "none"), caret \(editor.selectedRange().location)")
+            }
+            editor.string = original; editor.textStorage?.removeAttribute(.link, range: NSRange(location: 0, length: editor.string.utf16.count))
+            editor.setSelectedRange(NSRange(location: 3, length: 6)); clipboard("https://example.invalid/color"); paste()
+            let colorAfter = editor.textStorage?.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor
+            print("  linked words: underlined \((editor.textStorage?.attribute(.underlineStyle, at: 4, effectiveRange: nil) as? Int) == NSUnderlineStyle.single.rawValue), same color as before \(colorBefore == colorAfter)")
+            delegate.canvas.finishEditing(commit: true)
+            delegate.canvas.display(slide, in: presentation)
+            let drawn = item.paragraphs.first?.text
+            let at = drawn.map { $0.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor }
+            let neighbour = drawn.map { $0.attribute(.foregroundColor, at: 1, effectiveRange: nil) as? NSColor }
+            print("  on the slide: link \(item.paragraphs.first?.text.attribute(.link, at: 4, effectiveRange: nil) != nil), color same as the words around it \(at == neighbour)")
+            for _ in 0..<10 where delegate.undo.canUndo { delegate.undo.undo() }
+            return
+        }
         if ProcessInfo.processInfo.environment["DELETETABLE"] != nil {   // click a cell: the whole table is selected; Delete removes it; ⌘Z restores it
             let slide = presentation.slides[slideIndex]
             let cells = slide.items.filter(\.isTableCell)

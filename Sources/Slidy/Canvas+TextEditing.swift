@@ -10,7 +10,6 @@ extension CanvasView {
     func makeEditor(for item: SlideItem) -> InlineTextView {
         let night = nightActive
         // The editor starts `editorPad` above the object: stacked accents (Ế, Ẫ) rise above a tight line box and would be cut off.
-        InlineTextView.linkColor = presentation?.colors["hlink"] ?? NSColor(srgbRed: 0.05, green: 0.4, blue: 0.85, alpha: 1)
         let view = InlineTextView(frame: CGRect(x: item.frame.minX, y: item.frame.minY - Self.editorPad, width: item.frame.width, height: item.frame.height + Self.editorPad))
         view.isRichText = true; view.importsGraphics = false; view.usesFontPanel = false; view.usesRuler = false
         view.isAutomaticQuoteSubstitutionEnabled = false; view.isAutomaticDashSubstitutionEnabled = false
@@ -28,8 +27,6 @@ extension CanvasView {
             // The first character may be linked; the list marker and the typing style must not inherit the link.
             if attributes[.link] != nil {
                 attributes[.link] = nil; attributes[.underlineStyle] = nil
-                if let base = attributes[.slidyBaseColor] { attributes[.foregroundColor] = base }
-                attributes[.slidyBaseColor] = nil
             }
             let style = NSMutableParagraphStyle()
             style.alignment = paragraph.alignment

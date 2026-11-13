@@ -57,25 +57,38 @@ final class InlineTextView: NSTextView {
         guard range.length > 0, let storage = textStorage, NSMaxRange(range) <= storage.length else { return }
         storage.beginEditing()
         storage.enumerateAttributes(in: range) { attributes, part, _ in
-            if let url {
-                if attributes[.slidyBaseColor] == nil { storage.addAttribute(.slidyBaseColor, value: attributes[.foregroundColor] ?? NSColor.labelColor, range: part) }
+            if let url {   // underlined; the color stays the text's own
                 storage.addAttribute(.link, value: url, range: part)
                 storage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: part)
-                storage.addAttribute(.foregroundColor, value: Self.linkColor, range: part)
             } else if attributes[.link] != nil {
                 storage.removeAttribute(.link, range: part)
                 storage.removeAttribute(.underlineStyle, range: part)
-                if let base = attributes[.slidyBaseColor] as? NSColor { storage.addAttribute(.foregroundColor, value: base, range: part) }
-                storage.removeAttribute(.slidyBaseColor, range: part)
             }
         }
         storage.endEditing()
         linkEdited = true
         needsDisplay = true; onTextChange?()
     }
-    static var linkColor = NSColor(srgbRed: 0.05, green: 0.4, blue: 0.85, alpha: 1)
     /// The address of every character of every line (nil where there is no link).
     var linkAddresses: [[String?]] { perCharacter { linkAddress(at: $0) } }
+    /// ⌘V with text selected and a web address on the clipboard links the selection instead of pasting the address.
+    /// Only a clear link counts (http(s)://, mailto: or www.); anything else pastes as plain text.
+    static func clipboardLink() -> URL? {
+        guard let text = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty, text.count < 2000, !text.contains(where: \.isWhitespace) else { return nil }
+        let lower = text.lowercased()
+        guard lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("mailto:") || lower.hasPrefix("www.") else { return nil }
+        return AppDelegate.linkURL(from: text)
+    }
+    private func pasteOrLink() {
+        let range = selectedRange()
+        if range.length > 0, let url = Self.clipboardLink() {
+            setLink(url, in: range)
+            setSelectedRange(NSRange(location: NSMaxRange(range), length: 0))   // the caret goes after the linked words
+        } else { super.pasteAsPlainText(nil) }
+    }
+    override func paste(_ sender: Any?) { pasteOrLink() }
+    override func pasteAsPlainText(_ sender: Any?) { pasteOrLink() }
     /// ⌘-click on a link opens it (a plain click places the caret, as in any editor).
     override func mouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.command), let address = linkAddress(at: characterIndexForInsertion(at: convert(event.locationInWindow, from: nil))), let url = URL(string: address) {
