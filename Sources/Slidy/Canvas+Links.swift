@@ -78,7 +78,8 @@ extension CanvasView {
         if linkChip.address != found.url.absoluteString || linkChip.isHidden || linkChip.frame.width < 20 { linkChip.show(found.url.absoluteString) }
         linkChip.isHidden = false
         let rect = surface.convert(found.rect, to: self)
-        var origin = CGPoint(x: min(max(4, rect.minX), max(4, bounds.width - linkChip.frame.width - 4)), y: rect.minY - linkChip.frame.height - 1)
+        // At the top right end of the link: the chip's right edge lines up with where the link ends.
+        var origin = CGPoint(x: min(max(4, rect.maxX - linkChip.frame.width), max(4, bounds.width - linkChip.frame.width - 4)), y: rect.minY - linkChip.frame.height - 1)
         if origin.y < 4 { origin.y = rect.maxY + 1 }   // no room above: below the link
         linkChip.setFrameOrigin(origin)
     }
